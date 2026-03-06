@@ -5,7 +5,10 @@ ARG BUILD_ARCH
 ARG OXIGRAPH_VERSION=0.5.5
 
 # Install nginx and apache2-utils (htpasswd for Basic auth)
-RUN apk add --no-cache nginx apache2-utils curl gcompat
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        nginx apache2-utils curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -f /etc/nginx/sites-enabled/default
 
 # Download the oxigraph binary for the target architecture
 RUN set -eux; \
