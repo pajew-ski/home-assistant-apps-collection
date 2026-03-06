@@ -105,7 +105,7 @@ jobs:
             [i386]=linux/386
           )
 
-          for ARCH in amd64 aarch64 armv7 armhf i386; do
+          for ARCH in amd64 aarch64 armv7; do
             BASE_IMAGE="ghcr.io/home-assistant/${ARCH}-base:latest"
             PLATFORM="${PLATFORM_MAP[$ARCH]}"
             IMAGE_TAG="${REGISTRY}/${ARCH}-prompts"
@@ -125,7 +125,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          for ARCH in amd64 aarch64 armv7 armhf i386; do
+          for ARCH in amd64 aarch64 armv7; do
             PACKAGE="home-assistant-apps-collection%2F${ARCH}-prompts"
             gh api --method PATCH \
               -H "Accept: application/vnd.github+json" \
