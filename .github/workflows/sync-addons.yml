@@ -187,7 +187,7 @@ jobs:
           VERSION: ${{ steps.open_entrainer.outputs.upstream }}
           REGISTRY: ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection
         run: |
-          BUILD_DIR=$(mktemp -d)
+          export BUILD_DIR=$(mktemp -d)
 
           curl -sf \
             "https://raw.githubusercontent.com/pajew-ski/open-entrainer/main/index.html" \
@@ -282,7 +282,7 @@ jobs:
           VERSION: ${{ steps.open_desensitizer.outputs.upstream }}
           REGISTRY: ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection
         run: |
-          BUILD_DIR=$(mktemp -d)
+          export BUILD_DIR=$(mktemp -d)
 
           curl -sf \
             "https://raw.githubusercontent.com/pajew-ski/open-desensitizer/main/index.html" \
@@ -375,7 +375,7 @@ jobs:
           VERSION: ${{ steps.oxigraph.outputs.upstream }}
           REGISTRY: ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection
         run: |
-          BUILD_DIR=$(mktemp -d)
+          export BUILD_DIR=$(mktemp -d)
 
           # Dockerfile wraps the official oxigraph image; ARG BUILD_FROM is
           # declared (satisfies docker buildx --build-arg) but the official
