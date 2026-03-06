@@ -1,10 +1,9 @@
 name: "Oxigraph"
 description: >-
-  SPARQL 1.1 triple store and RDF graph database with built-in YASGUI query
-  interface. The web UI is always available via the Home Assistant sidebar
-  (ingress). External network access is disabled by default – enable it only
-  after setting auth_type to 'basic' or 'bearer' to protect your data, as
-  Oxigraph itself has no built-in authentication.
+  SPARQL 1.1 triple store und RDF-Graphdatenbank mit YASGUI-Query-Interface.
+  Sidebar-Zugriff immer aktiv. Externer Zugriff (Port 7878) optional –
+  erst auth_type auf basic oder bearer setzen, dann network_access aktivieren.
+  Oxigraph hat keinen eigenen Passwortschutz!
 version: "0.5.5"
 slug: oxigraph
 url: "https://github.com/oxigraph/oxigraph"
