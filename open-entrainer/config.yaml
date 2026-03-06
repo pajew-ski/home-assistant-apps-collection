@@ -1,6 +1,6 @@
 name: "Open Entrainer"
 description: "Binaural beats generator for brainwave entrainment – Delta, Theta, Alpha, Beta, Gamma."
-version: "2026.3.6"
+version: "2025.11.22"
 slug: open-entrainer
 url: "https://github.com/pajew-ski/open-entrainer"
 arch:
