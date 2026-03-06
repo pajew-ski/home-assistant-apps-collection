@@ -127,7 +127,7 @@ jobs:
       - name: Make prompts packages public
         if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'prompts' }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_PACKAGES || secrets.GITHUB_TOKEN }}
         run: |
           for ARCH in amd64 aarch64 armv7; do
             PACKAGE="home-assistant-apps-collection%2F${ARCH}-prompts"
@@ -222,7 +222,7 @@ jobs:
       - name: Make open-entrainer packages public
         if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'open-entrainer' }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_PACKAGES || secrets.GITHUB_TOKEN }}
         run: |
           for ARCH in amd64 aarch64 armv7; do
             PACKAGE="home-assistant-apps-collection%2F${ARCH}-open-entrainer"
@@ -317,7 +317,7 @@ jobs:
       - name: Make open-desensitizer packages public
         if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'open-desensitizer' }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_PACKAGES || secrets.GITHUB_TOKEN }}
         run: |
           for ARCH in amd64 aarch64 armv7; do
             PACKAGE="home-assistant-apps-collection%2F${ARCH}-open-desensitizer"
@@ -408,7 +408,7 @@ jobs:
       - name: Make oxigraph packages public
         if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'oxigraph' }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_PACKAGES || secrets.GITHUB_TOKEN }}
         run: |
           for ARCH in amd64 aarch64; do
             PACKAGE="home-assistant-apps-collection%2F${ARCH}-oxigraph"
