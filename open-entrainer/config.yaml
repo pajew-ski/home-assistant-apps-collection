@@ -1,0 +1,25 @@
+name: "Open Entrainer"
+description: "Binaural beats generator for brainwave entrainment – Delta, Theta, Alpha, Beta, Gamma."
+version: "2026.3.6"
+slug: open-entrainer
+url: "https://github.com/pajew-ski/open-entrainer"
+arch:
+    - amd64
+    - aarch64
+    - armv7
+startup: application
+boot: auto
+init: false
+ingress: true
+ingress_port: 8100
+ingress_entry: "/"
+panel_icon: "mdi:sine-wave"
+panel_title: "Open Entrainer"
+panel_admin: false
+image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-open-entrainer"
+ports:
+    8100/tcp: null
+ports_description:
+    8100/tcp: "Web UI"
+options: {}
+schema: {}

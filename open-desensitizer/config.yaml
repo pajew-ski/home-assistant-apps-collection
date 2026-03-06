@@ -1,0 +1,25 @@
+name: "Open Desensitizer"
+description: "Bilateral stimulation tool for stress reduction and relaxation via guided eye movement."
+version: "2026.3.6"
+slug: open-desensitizer
+url: "https://github.com/pajew-ski/open-desensitizer"
+arch:
+    - amd64
+    - aarch64
+    - armv7
+startup: application
+boot: auto
+init: false
+ingress: true
+ingress_port: 8101
+ingress_entry: "/"
+panel_icon: "mdi:eye-outline"
+panel_title: "Open Desensitizer"
+panel_admin: false
+image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-open-desensitizer"
+ports:
+    8101/tcp: null
+ports_description:
+    8101/tcp: "Web UI"
+options: {}
+schema: {}

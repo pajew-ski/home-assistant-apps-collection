@@ -149,3 +149,193 @@ jobs:
           git diff --cached --quiet || \
             git commit -m "chore(prompts): sync to v${{ steps.prompts.outputs.upstream }}"
           git push
+
+      # -----------------------------------------------------------------------
+      # open-entrainer – https://github.com/pajew-ski/open-entrainer
+      # -----------------------------------------------------------------------
+      - name: Check open-entrainer for updates
+        id: open_entrainer
+        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'open-entrainer' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          API_RESPONSE=$(curl -sf \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/pajew-ski/open-entrainer/commits?path=index.html&per_page=1")
+
+          UPSTREAM_VERSION=$(echo "$API_RESPONSE" | python3 -c \
+            'import sys,json; d=json.load(sys.stdin)[0]["commit"]["committer"]["date"][:10].split("-"); print(d[0]+"."+str(int(d[1]))+"."+str(int(d[2])))')
+
+          CURRENT_VERSION=$(grep '^version:' open-entrainer/config.yaml \
+            | awk '{print $2}' | tr -d '"')
+
+          echo "upstream=$UPSTREAM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "current=$CURRENT_VERSION"   >> "$GITHUB_OUTPUT"
+
+          if [ "$UPSTREAM_VERSION" != "$CURRENT_VERSION" ] \
+             || [ "${{ inputs.force }}" = "true" ]; then
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+            echo "Update needed: $CURRENT_VERSION → $UPSTREAM_VERSION"
+          else
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+            echo "Already up-to-date at $CURRENT_VERSION"
+          fi
+
+      - name: Build and push open-entrainer Docker images
+        if: steps.open_entrainer.outputs.needs_update == 'true'
+        env:
+          VERSION: ${{ steps.open_entrainer.outputs.upstream }}
+          REGISTRY: ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection
+        run: |
+          BUILD_DIR=$(mktemp -d)
+
+          curl -sf \
+            "https://raw.githubusercontent.com/pajew-ski/open-entrainer/main/index.html" \
+            -o "$BUILD_DIR/index.html"
+
+          python3 -c 'import os; open(os.environ["BUILD_DIR"]+"/Dockerfile","w").write("ARG BUILD_FROM\nFROM ${BUILD_FROM}\nRUN apk add --no-cache nginx\nRUN echo \"server { listen 8100; root /www; index index.html; }\" > /etc/nginx/http.d/default.conf\nCOPY index.html /www/index.html\nEXPOSE 8100\nENTRYPOINT []\nCMD [\"nginx\", \"-g\", \"daemon off;\"]\n")'
+
+          declare -A PLATFORM_MAP=(
+            [amd64]=linux/amd64
+            [aarch64]=linux/arm64
+            [armv7]=linux/arm/v7
+          )
+
+          for ARCH in amd64 aarch64 armv7; do
+            BASE_IMAGE="ghcr.io/home-assistant/${ARCH}-base:latest"
+            PLATFORM="${PLATFORM_MAP[$ARCH]}"
+            IMAGE_TAG="${REGISTRY}/${ARCH}-open-entrainer"
+
+            echo "Building $IMAGE_TAG:$VERSION for $PLATFORM …"
+            docker buildx build \
+              --platform "$PLATFORM" \
+              --build-arg BUILD_FROM="$BASE_IMAGE" \
+              --tag "${IMAGE_TAG}:${VERSION}" \
+              --tag "${IMAGE_TAG}:latest" \
+              --push \
+              "$BUILD_DIR"
+          done
+
+          # Update version in config.yaml
+          sed -i "s/^version:.*/version: \"$VERSION\"/" open-entrainer/config.yaml
+
+      - name: Make open-entrainer packages public
+        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'open-entrainer' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for ARCH in amd64 aarch64 armv7; do
+            PACKAGE="home-assistant-apps-collection%2F${ARCH}-open-entrainer"
+            gh api --method PATCH \
+              -H "Accept: application/vnd.github+json" \
+              "/user/packages/container/${PACKAGE}" \
+              -f visibility=public \
+              2>/dev/null \
+              && echo "${ARCH}-open-entrainer → public" \
+              || echo "${ARCH}-open-entrainer: visibility update skipped (may already be public or token lacks scope)"
+          done
+
+      - name: Commit and push open-entrainer changes
+        if: steps.open_entrainer.outputs.needs_update == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add open-entrainer/
+          git diff --cached --quiet || \
+            git commit -m "chore(open-entrainer): sync to v${{ steps.open_entrainer.outputs.upstream }}"
+          git push
+
+      # -----------------------------------------------------------------------
+      # open-desensitizer – https://github.com/pajew-ski/open-desensitizer
+      # -----------------------------------------------------------------------
+      - name: Check open-desensitizer for updates
+        id: open_desensitizer
+        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'open-desensitizer' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          API_RESPONSE=$(curl -sf \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/pajew-ski/open-desensitizer/commits?path=index.html&per_page=1")
+
+          UPSTREAM_VERSION=$(echo "$API_RESPONSE" | python3 -c \
+            'import sys,json; d=json.load(sys.stdin)[0]["commit"]["committer"]["date"][:10].split("-"); print(d[0]+"."+str(int(d[1]))+"."+str(int(d[2])))')
+
+          CURRENT_VERSION=$(grep '^version:' open-desensitizer/config.yaml \
+            | awk '{print $2}' | tr -d '"')
+
+          echo "upstream=$UPSTREAM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "current=$CURRENT_VERSION"   >> "$GITHUB_OUTPUT"
+
+          if [ "$UPSTREAM_VERSION" != "$CURRENT_VERSION" ] \
+             || [ "${{ inputs.force }}" = "true" ]; then
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+            echo "Update needed: $CURRENT_VERSION → $UPSTREAM_VERSION"
+          else
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+            echo "Already up-to-date at $CURRENT_VERSION"
+          fi
+
+      - name: Build and push open-desensitizer Docker images
+        if: steps.open_desensitizer.outputs.needs_update == 'true'
+        env:
+          VERSION: ${{ steps.open_desensitizer.outputs.upstream }}
+          REGISTRY: ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection
+        run: |
+          BUILD_DIR=$(mktemp -d)
+
+          curl -sf \
+            "https://raw.githubusercontent.com/pajew-ski/open-desensitizer/main/index.html" \
+            -o "$BUILD_DIR/index.html"
+
+          python3 -c 'import os; open(os.environ["BUILD_DIR"]+"/Dockerfile","w").write("ARG BUILD_FROM\nFROM ${BUILD_FROM}\nRUN apk add --no-cache nginx\nRUN echo \"server { listen 8101; root /www; index index.html; }\" > /etc/nginx/http.d/default.conf\nCOPY index.html /www/index.html\nEXPOSE 8101\nENTRYPOINT []\nCMD [\"nginx\", \"-g\", \"daemon off;\"]\n")'
+
+          declare -A PLATFORM_MAP=(
+            [amd64]=linux/amd64
+            [aarch64]=linux/arm64
+            [armv7]=linux/arm/v7
+          )
+
+          for ARCH in amd64 aarch64 armv7; do
+            BASE_IMAGE="ghcr.io/home-assistant/${ARCH}-base:latest"
+            PLATFORM="${PLATFORM_MAP[$ARCH]}"
+            IMAGE_TAG="${REGISTRY}/${ARCH}-open-desensitizer"
+
+            echo "Building $IMAGE_TAG:$VERSION for $PLATFORM …"
+            docker buildx build \
+              --platform "$PLATFORM" \
+              --build-arg BUILD_FROM="$BASE_IMAGE" \
+              --tag "${IMAGE_TAG}:${VERSION}" \
+              --tag "${IMAGE_TAG}:latest" \
+              --push \
+              "$BUILD_DIR"
+          done
+
+          # Update version in config.yaml
+          sed -i "s/^version:.*/version: \"$VERSION\"/" open-desensitizer/config.yaml
+
+      - name: Make open-desensitizer packages public
+        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'open-desensitizer' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for ARCH in amd64 aarch64 armv7; do
+            PACKAGE="home-assistant-apps-collection%2F${ARCH}-open-desensitizer"
+            gh api --method PATCH \
+              -H "Accept: application/vnd.github+json" \
+              "/user/packages/container/${PACKAGE}" \
+              -f visibility=public \
+              2>/dev/null \
+              && echo "${ARCH}-open-desensitizer → public" \
+              || echo "${ARCH}-open-desensitizer: visibility update skipped (may already be public or token lacks scope)"
+          done
+
+      - name: Commit and push open-desensitizer changes
+        if: steps.open_desensitizer.outputs.needs_update == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add open-desensitizer/
+          git diff --cached --quiet || \
+            git commit -m "chore(open-desensitizer): sync to v${{ steps.open_desensitizer.outputs.upstream }}"
+          git push
