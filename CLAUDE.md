@@ -182,6 +182,47 @@ No additional secrets are needed beyond the automatic `GITHUB_TOKEN`.
 
 ---
 
+## Known Issues & Lessons Learned
+
+### ghcr.io packages are private by default
+
+Newly pushed images land as **private** packages on ghcr.io. Home Assistant
+cannot pull private images (403/401). The workflow therefore calls the GitHub
+API after every build to set each package to public:
+
+```bash
+gh api --method PATCH \
+  -H "Accept: application/vnd.github+json" \
+  "/user/packages/container/home-assistant-apps-collection%2F${ARCH}-<slug>" \
+  -f visibility=public
+```
+
+This step must run **unconditionally** (not gated on `needs_update`), otherwise
+packages that were pushed in a previous run and are already at the correct
+version will stay private.
+
+### node:22-alpine does not support all HA architectures
+
+`node:22-alpine` (and Node.js 22 in general) only publishes images for:
+
+| Docker platform | HA arch |
+|-----------------|---------|
+| `linux/amd64`   | `amd64` |
+| `linux/arm64`   | `aarch64` |
+| `linux/arm/v7`  | `armv7` |
+
+**`armhf` (`linux/arm/v6`) and `i386` (`linux/386`) are not available.**
+
+If an add-on's Dockerfile uses `node:22-alpine` (or any other image that lacks
+`linux/arm/v6` / `linux/386`), you must:
+1. Remove `armhf` and `i386` from the `arch` list in `config.yaml`.
+2. Limit the build loop in the workflow to `amd64 aarch64 armv7`.
+
+Failing to do so causes the Docker buildx step to error with:
+> `no match for platform in manifest: not found`
+
+---
+
 ## Home Assistant Repository Requirements (reference)
 
 A valid HA add-on repository must have:
