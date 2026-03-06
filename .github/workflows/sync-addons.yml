@@ -121,7 +121,7 @@ jobs:
           done
 
       - name: Make prompts packages public
-        if: steps.prompts.outputs.needs_update == 'true'
+        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'prompts' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
