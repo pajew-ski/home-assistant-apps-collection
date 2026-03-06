@@ -1,0 +1,24 @@
+name: "Oxigraph"
+description: "SPARQL 1.1 triple store and RDF graph database with built-in YASGUI query interface."
+version: "0.5.5"
+slug: oxigraph
+url: "https://github.com/oxigraph/oxigraph"
+arch:
+    - amd64
+    - aarch64
+startup: application
+boot: auto
+init: false
+ingress: true
+ingress_port: 7878
+ingress_entry: "/"
+panel_icon: "mdi:graph"
+panel_title: "Oxigraph"
+panel_admin: false
+image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-oxigraph"
+ports:
+    7878/tcp: 7878
+ports_description:
+    7878/tcp: "SPARQL HTTP API & YASGUI Web UI"
+options: {}
+schema: {}

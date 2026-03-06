@@ -25,6 +25,15 @@
       "sync_files": ["index.html"],
       "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-open-desensitizer",
       "static_app": true
+    },
+    {
+      "slug": "oxigraph",
+      "name": "Oxigraph",
+      "source": "https://github.com/oxigraph/oxigraph",
+      "branch": "main",
+      "sync_files": [],
+      "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-oxigraph",
+      "upstream_image": "ghcr.io/oxigraph/oxigraph"
     }
   ]
 }
