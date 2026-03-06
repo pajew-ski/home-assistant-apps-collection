@@ -5,17 +5,17 @@ ARG BUILD_ARCH
 ARG OXIGRAPH_VERSION=0.5.5
 
 # Install nginx and apache2-utils (htpasswd for Basic auth)
-RUN apk add --no-cache nginx apache2-utils curl
+RUN apk add --no-cache nginx apache2-utils curl gcompat
 
-# Download the statically-linked oxigraph binary for the target architecture
+# Download the oxigraph binary for the target architecture
 RUN set -eux; \
     case "${BUILD_ARCH}" in \
-        amd64)   OX_ARCH="x86_64-unknown-linux-musl" ;; \
-        aarch64) OX_ARCH="aarch64-unknown-linux-musl" ;; \
+        amd64)   OX_ARCH="x86_64_linux_gnu" ;; \
+        aarch64) OX_ARCH="aarch64_linux_gnu" ;; \
         *) echo "Unsupported BUILD_ARCH: ${BUILD_ARCH}" && exit 1 ;; \
     esac; \
     curl -fsSL \
-        "https://github.com/oxigraph/oxigraph/releases/download/v${OXIGRAPH_VERSION}/oxigraph_${OX_ARCH}" \
+        "https://github.com/oxigraph/oxigraph/releases/download/v${OXIGRAPH_VERSION}/oxigraph_v${OXIGRAPH_VERSION}_${OX_ARCH}" \
         -o /usr/local/bin/oxigraph; \
     chmod +x /usr/local/bin/oxigraph
 
