@@ -163,12 +163,8 @@ jobs:
             -H "Authorization: Bearer $GH_TOKEN" \
             "https://api.github.com/repos/pajew-ski/open-entrainer/commits?path=index.html&per_page=1")
 
-          UPSTREAM_VERSION=$(echo "$API_RESPONSE" | python3 -c "
-import sys, json
-d = json.load(sys.stdin)[0]['commit']['committer']['date'][:10]
-p = d.split('-')
-print(f'{p[0]}.{int(p[1])}.{int(p[2])}')
-")
+          UPSTREAM_VERSION=$(echo "$API_RESPONSE" | python3 -c \
+            'import sys,json; d=json.load(sys.stdin)[0]["commit"]["committer"]["date"][:10].split("-"); print(d[0]+"."+str(int(d[1]))+"."+str(int(d[2])))')
 
           CURRENT_VERSION=$(grep '^version:' open-entrainer/config.yaml \
             | awk '{print $2}' | tr -d '"')
@@ -197,17 +193,7 @@ print(f'{p[0]}.{int(p[1])}.{int(p[2])}')
             "https://raw.githubusercontent.com/pajew-ski/open-entrainer/main/index.html" \
             -o "$BUILD_DIR/index.html"
 
-          cat > "$BUILD_DIR/Dockerfile" <<'DOCKER_EOF'
-          ARG BUILD_FROM
-          FROM ${BUILD_FROM}
-          RUN apk add --no-cache nginx && \
-              printf 'server {\n  listen 8100 default_server;\n  root /www;\n  index index.html;\n}\n' \
-                > /etc/nginx/http.d/default.conf
-          COPY index.html /www/index.html
-          EXPOSE 8100
-          ENTRYPOINT []
-          CMD ["nginx", "-g", "daemon off;"]
-          DOCKER_EOF
+          python3 -c 'import os; open(os.environ["BUILD_DIR"]+"/Dockerfile","w").write("ARG BUILD_FROM\nFROM ${BUILD_FROM}\nRUN apk add --no-cache nginx\nRUN echo \"server { listen 8100; root /www; index index.html; }\" > /etc/nginx/http.d/default.conf\nCOPY index.html /www/index.html\nEXPOSE 8100\nENTRYPOINT []\nCMD [\"nginx\", \"-g\", \"daemon off;\"]\n")'
 
           declare -A PLATFORM_MAP=(
             [amd64]=linux/amd64
@@ -272,12 +258,8 @@ print(f'{p[0]}.{int(p[1])}.{int(p[2])}')
             -H "Authorization: Bearer $GH_TOKEN" \
             "https://api.github.com/repos/pajew-ski/open-desensitizer/commits?path=index.html&per_page=1")
 
-          UPSTREAM_VERSION=$(echo "$API_RESPONSE" | python3 -c "
-import sys, json
-d = json.load(sys.stdin)[0]['commit']['committer']['date'][:10]
-p = d.split('-')
-print(f'{p[0]}.{int(p[1])}.{int(p[2])}')
-")
+          UPSTREAM_VERSION=$(echo "$API_RESPONSE" | python3 -c \
+            'import sys,json; d=json.load(sys.stdin)[0]["commit"]["committer"]["date"][:10].split("-"); print(d[0]+"."+str(int(d[1]))+"."+str(int(d[2])))')
 
           CURRENT_VERSION=$(grep '^version:' open-desensitizer/config.yaml \
             | awk '{print $2}' | tr -d '"')
@@ -306,17 +288,7 @@ print(f'{p[0]}.{int(p[1])}.{int(p[2])}')
             "https://raw.githubusercontent.com/pajew-ski/open-desensitizer/main/index.html" \
             -o "$BUILD_DIR/index.html"
 
-          cat > "$BUILD_DIR/Dockerfile" <<'DOCKER_EOF'
-          ARG BUILD_FROM
-          FROM ${BUILD_FROM}
-          RUN apk add --no-cache nginx && \
-              printf 'server {\n  listen 8101 default_server;\n  root /www;\n  index index.html;\n}\n' \
-                > /etc/nginx/http.d/default.conf
-          COPY index.html /www/index.html
-          EXPOSE 8101
-          ENTRYPOINT []
-          CMD ["nginx", "-g", "daemon off;"]
-          DOCKER_EOF
+          python3 -c 'import os; open(os.environ["BUILD_DIR"]+"/Dockerfile","w").write("ARG BUILD_FROM\nFROM ${BUILD_FROM}\nRUN apk add --no-cache nginx\nRUN echo \"server { listen 8101; root /www; index index.html; }\" > /etc/nginx/http.d/default.conf\nCOPY index.html /www/index.html\nEXPOSE 8101\nENTRYPOINT []\nCMD [\"nginx\", \"-g\", \"daemon off;\"]\n")'
 
           declare -A PLATFORM_MAP=(
             [amd64]=linux/amd64
