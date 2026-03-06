@@ -242,6 +242,51 @@ A valid HA add-on repository must have:
 
 ---
 
+## Add-ons with Custom Dockerfiles (`custom_dockerfile: true`)
+
+Some add-ons in this repo are **not** simple upstream mirrors but ship their
+own `Dockerfile` and `rootfs/` tree. These are marked in `addons-registry.json`
+with `"custom_dockerfile": true`.
+
+### oxigraph – nginx wrapper with auth and ingress
+
+**Why custom?** Oxigraph has no built-in authentication and its HTTP server
+cannot strip the HA ingress path prefix. A nginx reverse proxy solves both.
+
+**Architecture:**
+```
+oxigraph/
+├── Dockerfile          # HA base image + nginx + oxigraph binary (musl static)
+├── build.yaml          # ghcr.io/home-assistant/{arch}-base:latest
+├── config.yaml
+├── DOCS.md
+└── rootfs/etc/s6-overlay/s6-rc.d/
+    ├── oxigraph/run    # binds on 127.0.0.1:7879
+    ├── nginx/run       # generates nginx config from HA options, exec nginx
+    └── user/contents.d/nginx   # auto-start; oxigraph pulled in as dependency
+```
+
+**Ingress fix:** `ingress_entry: ""` (empty string). With `"/"` HA supervisor
+constructs `//` which oxigraph rejects. nginx on port 8099 proxies to
+oxigraph at 127.0.0.1:7879 and is IP-restricted to 172.30.32.2 (supervisor).
+
+**External access:** Port 7878, only when `network_access: true`. Auth options:
+- `none` – open, logs a prominent warning
+- `basic` – HTTP Basic Auth (htpasswd)
+- `bearer` – Bearer token via nginx `map` + `if` pattern
+
+**Versioning scheme:** `{upstream_oxigraph_version}.{packaging_patch}`, e.g. `0.5.5.1`.
+- New upstream release → `{new_upstream}.1`
+- Force rebuild without upstream change → increments packaging suffix only
+- Image tags and `config.yaml` always use the full packaging version.
+- The workflow's "Check oxigraph for updates" step strips the last `.N` segment
+  to compare only the upstream part against the GitHub releases API.
+
+**To trigger a rebuild / HA update:**
+Actions → Sync Add-ons → Run workflow → slug: `oxigraph`, Force rebuild: ✓
+
+---
+
 ## Do Not
 
 - **Do not** copy full application source code into this repository.
@@ -250,3 +295,5 @@ A valid HA add-on repository must have:
 - **Do not** remove the `image:` field from any `config.yaml` – without it HA
   would try to build from source and fail (no Dockerfile present).
 - **Do not** hardcode the `GITHUB_TOKEN` or any other secrets.
+- **Do not** change `ingress_entry` for oxigraph back to `"/"` – this causes
+  the `GET // is not supported` error in oxigraph.
