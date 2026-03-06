@@ -9,9 +9,6 @@ arch:
 startup: application
 boot: auto
 init: false
-ingress: true
-ingress_port: 7878
-ingress_entry: "/"
 panel_icon: "mdi:graph"
 panel_title: "Oxigraph"
 panel_admin: false
