@@ -7,6 +7,8 @@ arch:
     - amd64
     - aarch64
     - armv7
+    - armhf
+    - i386
 startup: application
 boot: auto
 init: false
@@ -16,7 +18,6 @@ ingress_entry: "/"
 panel_icon: "mdi:head-lightbulb"
 panel_title: "Prompts"
 panel_admin: false
-image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-prompts"
 ports:
     8099/tcp: null
 ports_description:
@@ -26,3 +27,4 @@ map:
       read_only: true
 options: {}
 schema: {}
+image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-prompts"
