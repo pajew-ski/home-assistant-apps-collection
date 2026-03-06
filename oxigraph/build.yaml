@@ -1,0 +1,3 @@
+build_from:
+    amd64: ghcr.io/oxigraph/oxigraph:latest
+    aarch64: ghcr.io/oxigraph/oxigraph:latest
