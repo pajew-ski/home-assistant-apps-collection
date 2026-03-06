@@ -72,12 +72,16 @@ jobs:
         run: |
           BASE_URL="https://raw.githubusercontent.com/pajew-ski/prompts/main"
 
-          # Always sync build.yaml
+          # Always sync build.yaml (strip unsupported archs)
           curl -sf "$BASE_URL/build.yaml" -o prompts/build.yaml
+          sed -i '/^\s*armhf:/d; /^\s*i386:/d' prompts/build.yaml
 
           # Sync upstream config.yaml and inject image reference
           UPSTREAM_CONFIG=$(curl -sf "$BASE_URL/config.yaml")
           echo "$UPSTREAM_CONFIG" > prompts/config.yaml
+
+          # Strip unsupported architectures from arch list
+          sed -i '/^\s*- armhf$/d; /^\s*- i386$/d' prompts/config.yaml
 
           # Add image field if not already present
           if ! grep -q '^image:' prompts/config.yaml; then
