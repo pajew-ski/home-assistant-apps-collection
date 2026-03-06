@@ -120,6 +120,22 @@ jobs:
               /tmp/prompts-source
           done
 
+      - name: Make prompts packages public
+        if: steps.prompts.outputs.needs_update == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for ARCH in amd64 aarch64 armv7 armhf i386; do
+            PACKAGE="home-assistant-apps-collection%2F${ARCH}-prompts"
+            gh api --method PATCH \
+              -H "Accept: application/vnd.github+json" \
+              "/user/packages/container/${PACKAGE}" \
+              -f visibility=public \
+              2>/dev/null \
+              && echo "${ARCH}-prompts → public" \
+              || echo "${ARCH}-prompts: visibility update skipped (may already be public or token lacks scope)"
+          done
+
       - name: Commit and push changes
         if: steps.prompts.outputs.needs_update == 'true'
         run: |
