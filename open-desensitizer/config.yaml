@@ -1,6 +1,6 @@
 name: "Open Desensitizer"
 description: "Bilateral stimulation tool for stress reduction and relaxation via guided eye movement."
-version: "2026.3.6"
+version: "2025.12.21"
 slug: open-desensitizer
 url: "https://github.com/pajew-ski/open-desensitizer"
 arch:
