@@ -7,11 +7,11 @@ AUTH_TYPE=$(bashio::config 'auth_type')
 NETWORK_ACCESS=$(bashio::config 'network_access')
 
 # Remove any config from a previous run
-rm -f /etc/nginx/http.d/oxigraph*.conf
+rm -f /etc/nginx/conf.d/oxigraph*.conf
 
 # ── Ingress server (HA supervisor only, port 8099, no auth) ──────────────────
 # ingress_entry is "" so HA supervisor forwards GET / correctly (no double slash)
-cat > /etc/nginx/http.d/oxigraph-ingress.conf << 'NGINX'
+cat > /etc/nginx/conf.d/oxigraph-ingress.conf << 'NGINX'
 server {
     listen 8099 default_server;
 
@@ -45,7 +45,7 @@ if bashio::config.true 'network_access'; then
             fi
             htpasswd -bc /etc/nginx/.htpasswd "$USERNAME" "$PASSWORD"
             bashio::log.info "External access enabled – Basic auth (user: ${USERNAME})"
-            cat > /etc/nginx/http.d/oxigraph-external.conf << 'NGINX'
+            cat > /etc/nginx/conf.d/oxigraph-external.conf << 'NGINX'
 server {
     listen 7878 default_server;
     location / {
@@ -71,10 +71,10 @@ NGINX
                 exit 1
             fi
             bashio::log.info "External access enabled – Bearer token auth"
-            # map directive must be in http context (http.d files are included there)
+            # map directive must be in http context (conf.d files are included there)
             printf 'map $http_authorization $oxigraph_ok {\n    "Bearer %s" 1;\n    default 0;\n}\n' \
-                "$BEARER_TOKEN" > /etc/nginx/http.d/oxigraph-external.conf
-            cat >> /etc/nginx/http.d/oxigraph-external.conf << 'NGINX'
+                "$BEARER_TOKEN" > /etc/nginx/conf.d/oxigraph-external.conf
+            cat >> /etc/nginx/conf.d/oxigraph-external.conf << 'NGINX'
 server {
     listen 7878 default_server;
     location / {
@@ -101,7 +101,7 @@ NGINX
             bashio::log.warning "⚠️  External access is enabled WITHOUT authentication!"
             bashio::log.warning "Anyone who can reach port 7878 can read AND modify your triple store."
             bashio::log.warning "Set auth_type to 'basic' or 'bearer' to protect Oxigraph."
-            cat > /etc/nginx/http.d/oxigraph-external.conf << 'NGINX'
+            cat > /etc/nginx/conf.d/oxigraph-external.conf << 'NGINX'
 server {
     listen 7878 default_server;
     location / {
