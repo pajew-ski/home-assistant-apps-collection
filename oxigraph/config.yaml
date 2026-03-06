@@ -1,5 +1,10 @@
 name: "Oxigraph"
-description: "SPARQL 1.1 triple store and RDF graph database with built-in YASGUI query interface."
+description: >-
+  SPARQL 1.1 triple store and RDF graph database with built-in YASGUI query
+  interface. The web UI is always available via the Home Assistant sidebar
+  (ingress). External network access is disabled by default – enable it only
+  after setting auth_type to 'basic' or 'bearer' to protect your data, as
+  Oxigraph itself has no built-in authentication.
 version: "0.5.5"
 slug: oxigraph
 url: "https://github.com/oxigraph/oxigraph"
@@ -9,13 +14,28 @@ arch:
 startup: application
 boot: auto
 init: false
+ingress: true
+ingress_port: 8099
+ingress_entry: ""
 panel_icon: "mdi:graph"
 panel_title: "Oxigraph"
 panel_admin: false
-image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-oxigraph"
 ports:
-    7878/tcp: 7878
+    7878/tcp: null
 ports_description:
-    7878/tcp: "SPARQL HTTP API & YASGUI Web UI"
-options: {}
-schema: {}
+    7878/tcp: "SPARQL HTTP API – external (only active when network_access is enabled)"
+map:
+    - data:rw
+options:
+    network_access: false
+    auth_type: "none"
+    username: ""
+    password: ""
+    bearer_token: ""
+schema:
+    network_access: bool
+    auth_type: list(none|basic|bearer)
+    username: str
+    password: str
+    bearer_token: str
+image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-oxigraph"

@@ -375,13 +375,6 @@ jobs:
           VERSION: ${{ steps.oxigraph.outputs.upstream }}
           REGISTRY: ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection
         run: |
-          export BUILD_DIR=$(mktemp -d)
-
-          # Dockerfile wraps the official oxigraph image; ARG BUILD_FROM is
-          # declared (satisfies docker buildx --build-arg) but the official
-          # multi-arch image is used as the actual base.
-          python3 -c 'import os; open(os.environ["BUILD_DIR"]+"/Dockerfile","w").write("ARG BUILD_FROM\nFROM ghcr.io/oxigraph/oxigraph:latest\nEXPOSE 7878\nCMD [\"serve\", \"--location\", \"/data\", \"--bind\", \"0.0.0.0:7878\"]\n")'
-
           declare -A PLATFORM_MAP=(
             [amd64]=linux/amd64
             [aarch64]=linux/arm64
@@ -396,10 +389,12 @@ jobs:
             docker buildx build \
               --platform "$PLATFORM" \
               --build-arg BUILD_FROM="$BASE_IMAGE" \
+              --build-arg BUILD_ARCH="$ARCH" \
+              --build-arg OXIGRAPH_VERSION="$VERSION" \
               --tag "${IMAGE_TAG}:${VERSION}" \
               --tag "${IMAGE_TAG}:latest" \
               --push \
-              "$BUILD_DIR"
+              oxigraph/
           done
 
           # Update version in config.yaml

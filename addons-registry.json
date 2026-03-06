@@ -33,7 +33,7 @@
       "branch": "main",
       "sync_files": [],
       "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-oxigraph",
-      "upstream_image": "ghcr.io/oxigraph/oxigraph"
+      "custom_dockerfile": true
     }
   ]
 }
