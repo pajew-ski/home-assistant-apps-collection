@@ -7,6 +7,24 @@
       "branch": "main",
       "sync_files": ["config.yaml", "build.yaml", "icon.png", "logo.png"],
       "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-prompts"
+    },
+    {
+      "slug": "open-entrainer",
+      "name": "Open Entrainer",
+      "source": "https://github.com/pajew-ski/open-entrainer",
+      "branch": "main",
+      "sync_files": ["index.html"],
+      "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-open-entrainer",
+      "static_app": true
+    },
+    {
+      "slug": "open-desensitizer",
+      "name": "Open Desensitizer",
+      "source": "https://github.com/pajew-ski/open-desensitizer",
+      "branch": "main",
+      "sync_files": ["index.html"],
+      "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-open-desensitizer",
+      "static_app": true
     }
   ]
 }
