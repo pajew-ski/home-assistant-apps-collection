@@ -1,0 +1,12 @@
+{
+  "addons": [
+    {
+      "slug": "prompts",
+      "name": "Prompts",
+      "source": "https://github.com/pajew-ski/prompts",
+      "branch": "main",
+      "sync_files": ["config.yaml", "build.yaml", "icon.png", "logo.png"],
+      "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-prompts"
+    }
+  ]
+}

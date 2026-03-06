@@ -1,0 +1,131 @@
+name: Sync Add-ons
+
+on:
+  schedule:
+    # Run daily at 06:00 UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      addon:
+        description: 'Add-on slug to sync (leave empty for all)'
+        required: false
+        default: ''
+      force:
+        description: 'Force rebuild even if version has not changed'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout collection
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU (multi-arch builds)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # -----------------------------------------------------------------------
+      # prompts – https://github.com/pajew-ski/prompts
+      # -----------------------------------------------------------------------
+      - name: Check prompts for updates
+        id: prompts
+        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'prompts' }}
+        run: |
+          UPSTREAM_VERSION=$(curl -sf \
+            https://raw.githubusercontent.com/pajew-ski/prompts/main/config.yaml \
+            | grep '^version:' | awk '{print $2}' | tr -d '"')
+
+          CURRENT_VERSION=$(grep '^version:' prompts/config.yaml \
+            | awk '{print $2}' | tr -d '"')
+
+          echo "upstream=$UPSTREAM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "current=$CURRENT_VERSION"   >> "$GITHUB_OUTPUT"
+
+          if [ "$UPSTREAM_VERSION" != "$CURRENT_VERSION" ] \
+             || [ "${{ inputs.force }}" = "true" ]; then
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+            echo "Update needed: $CURRENT_VERSION → $UPSTREAM_VERSION"
+          else
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+            echo "Already up-to-date at $CURRENT_VERSION"
+          fi
+
+      - name: Sync prompts config files
+        if: steps.prompts.outputs.needs_update == 'true'
+        run: |
+          BASE_URL="https://raw.githubusercontent.com/pajew-ski/prompts/main"
+
+          # Always sync build.yaml
+          curl -sf "$BASE_URL/build.yaml" -o prompts/build.yaml
+
+          # Sync upstream config.yaml and inject image reference
+          UPSTREAM_CONFIG=$(curl -sf "$BASE_URL/config.yaml")
+          echo "$UPSTREAM_CONFIG" > prompts/config.yaml
+
+          # Add image field if not already present
+          if ! grep -q '^image:' prompts/config.yaml; then
+            echo 'image: "ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection/{arch}-prompts"' \
+              >> prompts/config.yaml
+          fi
+
+          # Sync optional display assets (ignore 404s)
+          curl -sf "$BASE_URL/icon.png" -o prompts/icon.png  2>/dev/null || true
+          curl -sf "$BASE_URL/logo.png" -o prompts/logo.png  2>/dev/null || true
+
+      - name: Build and push prompts Docker images
+        if: steps.prompts.outputs.needs_update == 'true'
+        env:
+          VERSION: ${{ steps.prompts.outputs.upstream }}
+          REGISTRY: ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection
+        run: |
+          git clone --depth 1 https://github.com/pajew-ski/prompts /tmp/prompts-source
+
+          declare -A PLATFORM_MAP=(
+            [amd64]=linux/amd64
+            [aarch64]=linux/arm64
+            [armv7]=linux/arm/v7
+            [armhf]=linux/arm/v6
+            [i386]=linux/386
+          )
+
+          for ARCH in amd64 aarch64 armv7 armhf i386; do
+            BASE_IMAGE="ghcr.io/home-assistant/${ARCH}-base:latest"
+            PLATFORM="${PLATFORM_MAP[$ARCH]}"
+            IMAGE_TAG="${REGISTRY}/${ARCH}-prompts"
+
+            echo "Building $IMAGE_TAG:$VERSION for $PLATFORM …"
+            docker buildx build \
+              --platform "$PLATFORM" \
+              --build-arg BUILD_FROM="$BASE_IMAGE" \
+              --tag "${IMAGE_TAG}:${VERSION}" \
+              --tag "${IMAGE_TAG}:latest" \
+              --push \
+              /tmp/prompts-source
+          done
+
+      - name: Commit and push changes
+        if: steps.prompts.outputs.needs_update == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add prompts/
+          git diff --cached --quiet || \
+            git commit -m "chore(prompts): sync to v${{ steps.prompts.outputs.upstream }}"
+          git push

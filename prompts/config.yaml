@@ -1,0 +1,30 @@
+name: "Prompts"
+description: "100+ KI-Prompting-Strategien – durchsuchbar, filterbar, sofort kopierbar."
+version: "1.0.3"
+slug: "prompts"
+url: "https://github.com/pajew-ski/prompts"
+arch:
+    - amd64
+    - aarch64
+    - armv7
+    - armhf
+    - i386
+startup: application
+boot: auto
+init: false
+ingress: true
+ingress_port: 8099
+ingress_entry: "/"
+panel_icon: "mdi:head-lightbulb"
+panel_title: "Prompts"
+panel_admin: false
+image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-prompts"
+ports:
+    8099/tcp: null
+ports_description:
+    8099/tcp: "Web UI"
+map:
+    - type: config
+      read_only: true
+options: {}
+schema: {}
