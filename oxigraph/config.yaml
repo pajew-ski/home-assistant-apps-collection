@@ -4,7 +4,7 @@ description: >-
   Sidebar-Zugriff immer aktiv. Externer Zugriff (Port 7878) optional –
   erst auth_type auf basic oder bearer setzen, dann network_access aktivieren.
   Oxigraph hat keinen eigenen Passwortschutz!
-version: "0.5.5.2"
+version: "0.5.5.3"
 slug: oxigraph
 url: "https://github.com/oxigraph/oxigraph"
 arch:
