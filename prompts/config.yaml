@@ -1,14 +1,12 @@
 name: "Prompts"
 description: "100+ KI-Prompting-Strategien – durchsuchbar, filterbar, sofort kopierbar."
-version: "1.0.3"
+version: "1.0.4"
 slug: "prompts"
 url: "https://github.com/pajew-ski/prompts"
 arch:
     - amd64
     - aarch64
     - armv7
-    - armhf
-    - i386
 startup: application
 boot: auto
 init: false
