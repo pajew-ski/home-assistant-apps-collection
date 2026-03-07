@@ -398,7 +398,7 @@ jobs:
           )
 
           for ARCH in amd64 aarch64; do
-            BASE_IMAGE="ghcr.io/home-assistant/${ARCH}-base:latest"
+            BASE_IMAGE="ghcr.io/home-assistant/${ARCH}-base-ubuntu:latest"
             PLATFORM="${PLATFORM_MAP[$ARCH]}"
             IMAGE_TAG="${REGISTRY}/${ARCH}-oxigraph"
 
