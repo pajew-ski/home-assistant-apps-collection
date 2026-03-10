@@ -12,7 +12,7 @@ ARG BUILD_ARCH
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nginx \
-        openjdk-17-jre-headless \
+        openjdk-21-jre-headless \
         python3 \
         curl \
         jq \
