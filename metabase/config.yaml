@@ -1,0 +1,32 @@
+name: "Metabase Analytics"
+description: >-
+  Business-Intelligence und Datenanalyse fuer Home Assistant.
+  Verbindet sich direkt mit der HA Recorder-Datenbank.
+  Automatischer Login ueber HA Ingress – kein separates Metabase-Passwort.
+version: "0.52.8.1"
+slug: metabase
+url: "https://github.com/metabase/metabase"
+arch:
+    - amd64
+    - aarch64
+startup: application
+boot: auto
+init: false
+ingress: true
+ingress_port: 8099
+ingress_entry: /
+panel_icon: "mdi:chart-bar"
+panel_title: "Metabase"
+panel_admin: false
+map:
+    - data:rw
+    - config:ro
+options:
+    recorder_db_url: ""
+    java_memory: "1g"
+    theme_sync: true
+schema:
+    recorder_db_url: str
+    java_memory: str
+    theme_sync: bool
+image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-metabase"
