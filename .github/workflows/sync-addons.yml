@@ -442,3 +442,102 @@ jobs:
           git diff --cached --quiet || \
             git commit -m "chore(oxigraph): sync to v${{ steps.oxigraph.outputs.upstream }}"
           git push
+
+      # -----------------------------------------------------------------------
+      # metabase – https://github.com/metabase/metabase
+      # -----------------------------------------------------------------------
+      - name: Check metabase for updates
+        id: metabase
+        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'metabase' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          UPSTREAM_VERSION=$(curl -sf \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/metabase/metabase/releases/latest" \
+            | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"].lstrip("v"))')
+
+          # Versioning scheme: {upstream}.{packaging_patch}  e.g. 0.52.8.1
+          CURRENT_VERSION=$(grep '^version:' metabase/config.yaml \
+            | awk '{print $2}' | tr -d '"')
+          CURRENT_UPSTREAM=$(echo "$CURRENT_VERSION" | sed 's/\.[0-9]*$//')
+          PACKAGING_VER=$(echo "$CURRENT_VERSION" | sed 's/.*\.\([0-9]*\)$/\1/')
+
+          echo "upstream=$UPSTREAM_VERSION"       >> "$GITHUB_OUTPUT"
+          echo "current=$CURRENT_VERSION"         >> "$GITHUB_OUTPUT"
+
+          if [ "$UPSTREAM_VERSION" != "$CURRENT_UPSTREAM" ]; then
+            NEW_VERSION="${UPSTREAM_VERSION}.1"
+            echo "needs_update=true"              >> "$GITHUB_OUTPUT"
+            echo "new_version=$NEW_VERSION"       >> "$GITHUB_OUTPUT"
+            echo "mb_version=$UPSTREAM_VERSION"   >> "$GITHUB_OUTPUT"
+            echo "New upstream release: $CURRENT_VERSION → $NEW_VERSION"
+          elif [ "${{ inputs.force }}" = "true" ]; then
+            NEW_VERSION="${CURRENT_UPSTREAM}.$((PACKAGING_VER + 1))"
+            echo "needs_update=true"              >> "$GITHUB_OUTPUT"
+            echo "new_version=$NEW_VERSION"       >> "$GITHUB_OUTPUT"
+            echo "mb_version=$UPSTREAM_VERSION"   >> "$GITHUB_OUTPUT"
+            echo "Force rebuild: $CURRENT_VERSION → $NEW_VERSION"
+          else
+            echo "needs_update=false"             >> "$GITHUB_OUTPUT"
+            echo "new_version=$CURRENT_VERSION"   >> "$GITHUB_OUTPUT"
+            echo "mb_version=$UPSTREAM_VERSION"   >> "$GITHUB_OUTPUT"
+            echo "Already up-to-date at $CURRENT_VERSION"
+          fi
+
+      - name: Build and push metabase Docker images
+        if: steps.metabase.outputs.needs_update == 'true'
+        env:
+          NEW_VERSION: ${{ steps.metabase.outputs.new_version }}
+          MB_VERSION: ${{ steps.metabase.outputs.mb_version }}
+          REGISTRY: ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection
+        run: |
+          declare -A PLATFORM_MAP=(
+            [amd64]=linux/amd64
+            [aarch64]=linux/arm64
+          )
+
+          for ARCH in amd64 aarch64; do
+            BASE_IMAGE="ghcr.io/home-assistant/${ARCH}-base-ubuntu:latest"
+            PLATFORM="${PLATFORM_MAP[$ARCH]}"
+            IMAGE_TAG="${REGISTRY}/${ARCH}-metabase"
+
+            echo "Building $IMAGE_TAG:$NEW_VERSION (metabase $MB_VERSION) for $PLATFORM …"
+            docker buildx build \
+              --platform "$PLATFORM" \
+              --build-arg BUILD_FROM="$BASE_IMAGE" \
+              --build-arg BUILD_ARCH="$ARCH" \
+              --build-arg METABASE_VERSION="$MB_VERSION" \
+              --tag "${IMAGE_TAG}:${NEW_VERSION}" \
+              --tag "${IMAGE_TAG}:latest" \
+              --push \
+              metabase/
+          done
+
+          sed -i "s/^version:.*/version: \"$NEW_VERSION\"/" metabase/config.yaml
+
+      - name: Make metabase packages public
+        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'metabase' }}
+        env:
+          GH_TOKEN: ${{ secrets.PAT_PACKAGES || secrets.GITHUB_TOKEN }}
+        run: |
+          for ARCH in amd64 aarch64; do
+            PACKAGE="home-assistant-apps-collection%2F${ARCH}-metabase"
+            gh api --method PATCH \
+              -H "Accept: application/vnd.github+json" \
+              "/user/packages/container/${PACKAGE}" \
+              -f visibility=public \
+              2>/dev/null \
+              && echo "${ARCH}-metabase → public" \
+              || echo "${ARCH}-metabase: visibility update skipped (may already be public or token lacks scope)"
+          done
+
+      - name: Commit and push metabase changes
+        if: steps.metabase.outputs.needs_update == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add metabase/
+          git diff --cached --quiet || \
+            git commit -m "chore(metabase): sync to v${{ steps.metabase.outputs.upstream }}"
+          git push

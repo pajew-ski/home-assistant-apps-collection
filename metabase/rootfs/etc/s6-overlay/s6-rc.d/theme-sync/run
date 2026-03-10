@@ -1,0 +1,13 @@
+#!/usr/bin/with-contenv bashio
+set -e
+
+if bashio::config.true 'theme_sync'; then
+    bashio::log.info "Starting theme sync (live HA theme → Metabase CSS)..."
+    exec python3 /usr/bin/theme_sync.py
+else
+    bashio::log.info "Theme sync disabled."
+    # Write empty CSS so nginx sub_filter still finds the file
+    echo "" > /data/ha-theme.css
+    # Nothing to do – sleep forever so s6 doesn't restart us
+    exec sleep infinity
+fi
