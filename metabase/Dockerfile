@@ -13,6 +13,7 @@ ARG BUILD_ARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nginx \
         openjdk-17-jre-headless \
+        python3 \
         curl \
         jq \
     && rm -rf /var/lib/apt/lists/* \
@@ -26,6 +27,6 @@ COPY rootfs /
 
 # Make all run scripts and helper binaries executable
 RUN find /etc/s6-overlay/s6-rc.d -name "run" -exec chmod a+x {} \; \
-    && chmod +x /usr/bin/bootstrap.sh
+    && chmod +x /usr/bin/bootstrap.sh /usr/bin/theme_sync.py
 
 VOLUME ["/data"]
