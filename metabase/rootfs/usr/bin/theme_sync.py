@@ -4,15 +4,16 @@ Fetch the active Home Assistant theme colours via the WebSocket API
 and generate a Metabase CSS override file.
 
 Runs as a one-shot on startup and then watches for theme changes
-via subscribe_events (frontend_updated).
+via subscribe_events (themes_updated).
 """
 
+import base64
 import json
 import os
-import signal
+import random
 import socket
+import struct
 import subprocess
-import sys
 import time
 
 SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
@@ -31,13 +32,18 @@ DEFAULTS = {
 }
 
 # ── Minimal WebSocket client (no external deps) ─────────────────────────────
-# We only need text frames; no masking required from server→client direction
-# but we DO need to mask client→server frames per RFC 6455.
+# RFC 6455 compliant: handles ping/pong, close frames, and masked client frames.
 
-import hashlib
-import base64
-import struct
-import random
+
+def _recv_exact(sock, n):
+    """Read exactly n bytes from socket."""
+    buf = b""
+    while len(buf) < n:
+        chunk = sock.recv(n - len(buf))
+        if not chunk:
+            raise ConnectionError("Connection closed")
+        buf += chunk
+    return buf
 
 
 def _ws_connect():
@@ -66,28 +72,56 @@ def _ws_connect():
     if b"101" not in resp.split(b"\r\n")[0]:
         raise ConnectionError(f"WebSocket handshake failed: {resp[:200]}")
 
+    # Switch to no timeout for long-lived event subscription
+    sock.settimeout(None)
+
     return sock
 
 
 def _ws_recv(sock):
-    """Read one WebSocket text frame and return decoded string."""
-    header = sock.recv(2)
-    if len(header) < 2:
-        raise ConnectionError("Connection closed")
-    payload_len = header[1] & 0x7F
-    if payload_len == 126:
-        payload_len = struct.unpack(">H", sock.recv(2))[0]
-    elif payload_len == 127:
-        payload_len = struct.unpack(">Q", sock.recv(8))[0]
+    """Read one WebSocket text frame, handling ping/pong/close transparently."""
+    while True:
+        header = _recv_exact(sock, 2)
+        opcode = header[0] & 0x0F
+        masked = bool(header[1] & 0x80)
+        payload_len = header[1] & 0x7F
 
-    data = b""
-    while len(data) < payload_len:
-        chunk = sock.recv(payload_len - len(data))
-        if not chunk:
-            raise ConnectionError("Connection closed during read")
-        data += chunk
+        if payload_len == 126:
+            payload_len = struct.unpack(">H", _recv_exact(sock, 2))[0]
+        elif payload_len == 127:
+            payload_len = struct.unpack(">Q", _recv_exact(sock, 8))[0]
 
-    return data.decode("utf-8")
+        # Server frames should not be masked, but handle it just in case
+        mask_key = _recv_exact(sock, 4) if masked else None
+
+        data = _recv_exact(sock, payload_len) if payload_len > 0 else b""
+
+        if masked and mask_key:
+            data = bytes(b ^ mask_key[i % 4] for i, b in enumerate(data))
+
+        # Handle control frames
+        if opcode == 0x9:  # Ping → respond with Pong
+            _ws_send_pong(sock, data)
+            continue
+        elif opcode == 0xA:  # Pong → ignore
+            continue
+        elif opcode == 0x8:  # Close
+            raise ConnectionError("Server sent close frame")
+
+        # Text frame (0x1) or continuation — decode and return
+        return data.decode("utf-8")
+
+
+def _ws_send_pong(sock, data):
+    """Send a masked pong frame."""
+    frame = bytearray()
+    frame.append(0x8A)  # FIN + pong opcode
+    length = len(data)
+    frame.append(0x80 | length)  # MASK bit set
+    mask = random.randbytes(4)
+    frame.extend(mask)
+    frame.extend(bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
+    sock.sendall(frame)
 
 
 def _ws_send(sock, text):
@@ -224,6 +258,8 @@ def main():
                 time.sleep(30)
                 continue
 
+            print("[theme_sync] Connected to HA WebSocket.", flush=True)
+
             # Step 3: fetch current themes
             msg_id += 1
             themes, default_theme = fetch_themes(sock, msg_id)
@@ -243,7 +279,7 @@ def main():
                 "event_type": "themes_updated",
             }))
 
-            # Step 5: wait for theme change events
+            # Step 5: wait for theme change events (blocks indefinitely)
             while True:
                 raw = _ws_recv(sock)
                 msg = json.loads(raw)
@@ -260,6 +296,10 @@ def main():
 
         except Exception as e:
             print(f"[theme_sync] Error: {e} – reconnecting in 30s", flush=True)
+            try:
+                sock.close()
+            except Exception:
+                pass
             time.sleep(30)
 
 
