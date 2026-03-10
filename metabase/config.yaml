@@ -18,6 +18,7 @@ ingress_entry: /
 panel_icon: "mdi:chart-bar"
 panel_title: "Metabase"
 panel_admin: false
+homeassistant_api: true
 map:
     - data:rw
     - config:ro

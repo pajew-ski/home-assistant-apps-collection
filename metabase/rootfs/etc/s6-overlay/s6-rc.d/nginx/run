@@ -79,7 +79,6 @@ server {
         # Inject theme CSS into Metabase HTML pages
         sub_filter '</head>' '<link rel="stylesheet" href="/ha-theme.css"></head>';
         sub_filter_once on;
-        sub_filter_types text/html;
 
         # Remove X-Frame-Options so HA can embed in its own frame
         proxy_hide_header X-Frame-Options;
