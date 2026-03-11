@@ -165,11 +165,13 @@ elif echo "$RECORDER_URL" | grep -qi '^sqlite:///'; then
     SRC_PATH=$(echo "$RECORDER_URL" | sed 's|^sqlite:///||')
     DB_COPY="/data/ha_recorder.db"
 
-    # Use SQLite's online backup API to create a consistent snapshot in
-    # /data/ (writable). This handles WAL checkpointing and locking
-    # correctly even while HA is actively writing to the source DB.
+    # Create a consistent snapshot using SQLite's VACUUM INTO, which
+    # only needs read access to the source and writes a brand-new,
+    # self-contained DB file. No lock files (-wal/-shm) are created on
+    # the read-only /config mount.
     bashio::log.info "Creating consistent snapshot: ${SRC_PATH} → ${DB_COPY} ..."
-    sqlite3 "$SRC_PATH" ".backup '${DB_COPY}'"
+    rm -f "$DB_COPY"
+    sqlite3 "file:${SRC_PATH}?mode=ro&immutable=1" "VACUUM INTO '${DB_COPY}';"
 
     # Pass the plain file path to Metabase. The SQLite driver's
     # confirm_file_is_sqlite check opens the value as a regular file,

@@ -14,6 +14,9 @@ bashio::log.info "db-sync: refreshing ${DB_COPY} from ${HA_SQLITE} every ${INTER
 
 while true; do
     sleep "$INTERVAL"
-    sqlite3 "$HA_SQLITE" ".backup '${DB_COPY}'"
+    # VACUUM INTO only needs read access; no lock files on the ro mount.
+    # Remove stale copy first so VACUUM INTO does not fail on existing file.
+    rm -f "$DB_COPY"
+    sqlite3 "file:${HA_SQLITE}?mode=ro&immutable=1" "VACUUM INTO '${DB_COPY}';"
     bashio::log.debug "db-sync: snapshot refreshed."
 done
