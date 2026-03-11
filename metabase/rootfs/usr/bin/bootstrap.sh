@@ -164,10 +164,10 @@ elif echo "$RECORDER_URL" | grep -qi '^sqlite:///'; then
     ENGINE="sqlite"
     DB_PATH=$(echo "$RECORDER_URL" | sed 's|^sqlite:///||')
 
-    # Use SQLite URI filename format with mode=ro so the driver does not
-    # attempt to create journal/WAL/SHM files on the read-only mount.
-    DB_URI="file:${DB_PATH}?mode=ro"
-
+    # Pass the plain file path to Metabase. The SQLite driver's
+    # confirm_file_is_sqlite check opens the value as a regular file,
+    # so URI query parameters (e.g. ?mode=ro) cause a
+    # FileNotFoundException.
     curl -sf -X POST "${MB_URL}/api/database" \
         -H "Content-Type: application/json" \
         -H "X-Metabase-Session: ${SESSION}" \
@@ -175,11 +175,11 @@ elif echo "$RECORDER_URL" | grep -qi '^sqlite:///'; then
             \"engine\": \"${ENGINE}\",
             \"name\": \"Home Assistant\",
             \"details\": {
-                \"db\": \"${DB_URI}\"
+                \"db\": \"${DB_PATH}\"
             }
         }" >/dev/null
 
-    bashio::log.info "SQLite database connected (read-only): ${DB_PATH}"
+    bashio::log.info "SQLite database connected: ${DB_PATH}"
 
 else
     bashio::log.warning "Unsupported recorder DB URL scheme: ${RECORDER_URL}"
