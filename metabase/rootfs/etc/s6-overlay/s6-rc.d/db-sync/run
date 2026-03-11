@@ -1,0 +1,21 @@
+#!/usr/bin/with-contenv bashio
+set -e
+
+HA_SQLITE="/config/home-assistant_v2.db"
+DB_COPY="/data/ha_recorder.db"
+INTERVAL=300  # 5 minutes
+
+if [ ! -f "$HA_SQLITE" ]; then
+    bashio::log.info "db-sync: no SQLite DB at ${HA_SQLITE}, sleeping."
+    exec sleep infinity
+fi
+
+bashio::log.info "db-sync: refreshing ${DB_COPY} from ${HA_SQLITE} every ${INTERVAL}s."
+
+while true; do
+    sleep "$INTERVAL"
+    cp -f "$HA_SQLITE" "$DB_COPY"
+    [ -f "${HA_SQLITE}-wal" ] && cp -f "${HA_SQLITE}-wal" "${DB_COPY}-wal"
+    [ -f "${HA_SQLITE}-shm" ] && cp -f "${HA_SQLITE}-shm" "${DB_COPY}-shm"
+    bashio::log.debug "db-sync: copy refreshed."
+done

@@ -162,7 +162,17 @@ elif echo "$RECORDER_URL" | grep -qi '^mysql://\|^mysql+pymysql://'; then
 
 elif echo "$RECORDER_URL" | grep -qi '^sqlite:///'; then
     ENGINE="sqlite"
-    DB_PATH=$(echo "$RECORDER_URL" | sed 's|^sqlite:///||')
+    SRC_PATH=$(echo "$RECORDER_URL" | sed 's|^sqlite:///||')
+    DB_COPY="/data/ha_recorder.db"
+
+    # Copy the SQLite DB to /data/ (writable) so Metabase can create the
+    # journal/WAL/SHM files it needs. This keeps /config mounted read-only
+    # and avoids any risk of Metabase corrupting the live HA database.
+    bashio::log.info "Copying ${SRC_PATH} → ${DB_COPY} ..."
+    cp -f "$SRC_PATH" "$DB_COPY"
+    # Also copy WAL/SHM if they exist, so the copy is consistent
+    [ -f "${SRC_PATH}-wal" ] && cp -f "${SRC_PATH}-wal" "${DB_COPY}-wal"
+    [ -f "${SRC_PATH}-shm" ] && cp -f "${SRC_PATH}-shm" "${DB_COPY}-shm"
 
     # Pass the plain file path to Metabase. The SQLite driver's
     # confirm_file_is_sqlite check opens the value as a regular file,
@@ -175,11 +185,11 @@ elif echo "$RECORDER_URL" | grep -qi '^sqlite:///'; then
             \"engine\": \"${ENGINE}\",
             \"name\": \"Home Assistant\",
             \"details\": {
-                \"db\": \"${DB_PATH}\"
+                \"db\": \"${DB_COPY}\"
             }
         }" >/dev/null
 
-    bashio::log.info "SQLite database connected: ${DB_PATH}"
+    bashio::log.info "SQLite database connected (copy): ${DB_COPY}"
 
 else
     bashio::log.warning "Unsupported recorder DB URL scheme: ${RECORDER_URL}"

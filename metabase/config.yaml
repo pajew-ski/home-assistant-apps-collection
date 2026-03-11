@@ -3,7 +3,7 @@ description: >-
   Business-Intelligence und Datenanalyse fuer Home Assistant.
   Verbindet sich direkt mit der HA Recorder-Datenbank.
   Automatischer Login ueber HA Ingress – kein separates Metabase-Passwort.
-version: "0.59.1.7"
+version: "0.59.1.8"
 slug: metabase
 url: "https://github.com/metabase/metabase"
 arch:
@@ -21,7 +21,7 @@ panel_admin: false
 homeassistant_api: true
 map:
     - data:rw
-    - config:rw
+    - config:ro
 options:
     recorder_db_url: ""
     java_memory: "1g"
