@@ -70,10 +70,16 @@ if [ -z "$RECORDER_URL" ] && [ -f /config/configuration.yaml ]; then
 fi
 
 if [ -z "$RECORDER_URL" ]; then
-    bashio::log.info "No recorder DB URL configured or detected."
-    bashio::log.info "Default SQLite DB cannot be auto-connected (read-only mount)."
-    bashio::log.info "Configure 'recorder_db_url' or add the database manually in Metabase."
-    exit 0
+    # Default: auto-connect the HA SQLite database
+    HA_SQLITE="/config/home-assistant_v2.db"
+    if [ -f "$HA_SQLITE" ]; then
+        bashio::log.info "No recorder DB URL configured – auto-connecting default SQLite DB."
+        RECORDER_URL="sqlite:///${HA_SQLITE}"
+    else
+        bashio::log.info "No recorder DB URL configured and no SQLite DB found at ${HA_SQLITE}."
+        bashio::log.info "Configure 'recorder_db_url' or add the database manually in Metabase."
+        exit 0
+    fi
 fi
 
 # Get session for API calls
@@ -154,8 +160,29 @@ elif echo "$RECORDER_URL" | grep -qi '^mysql://\|^mysql+pymysql://'; then
 
     bashio::log.info "MySQL database connected: ${DB_HOST}:${DB_PORT}/${DB_NAME}"
 
+elif echo "$RECORDER_URL" | grep -qi '^sqlite:///'; then
+    ENGINE="sqlite"
+    DB_PATH=$(echo "$RECORDER_URL" | sed 's|^sqlite:///||')
+
+    # Use SQLite URI filename format with mode=ro so the driver does not
+    # attempt to create journal/WAL/SHM files on the read-only mount.
+    DB_URI="file:${DB_PATH}?mode=ro"
+
+    curl -sf -X POST "${MB_URL}/api/database" \
+        -H "Content-Type: application/json" \
+        -H "X-Metabase-Session: ${SESSION}" \
+        -d "{
+            \"engine\": \"${ENGINE}\",
+            \"name\": \"Home Assistant\",
+            \"details\": {
+                \"db\": \"${DB_URI}\"
+            }
+        }" >/dev/null
+
+    bashio::log.info "SQLite database connected (read-only): ${DB_PATH}"
+
 else
     bashio::log.warning "Unsupported recorder DB URL scheme: ${RECORDER_URL}"
-    bashio::log.warning "Supported: postgresql://, mysql://, mysql+pymysql://"
+    bashio::log.warning "Supported: postgresql://, mysql://, mysql+pymysql://, sqlite:///"
     bashio::log.warning "Add the database manually through the Metabase UI."
 fi
