@@ -76,9 +76,13 @@ server {
         # Inject session cookie for SSO – every ingress response sets the cookie
         add_header Set-Cookie "metabase.SESSION=${SESSION_TOKEN}; Path=/; HttpOnly; SameSite=Lax" always;
 
+        # Disable upstream compression so sub_filter can operate on the text
+        proxy_set_header Accept-Encoding "";
+
         # Inject theme CSS into Metabase HTML pages
         sub_filter '</head>' '<link rel="stylesheet" href="/ha-theme.css"></head>';
         sub_filter_once on;
+        sub_filter_types text/html;
 
         # Remove framing restrictions so HA can embed in its own iframe
         proxy_hide_header X-Frame-Options;
