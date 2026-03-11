@@ -162,12 +162,21 @@ elif echo "$RECORDER_URL" | grep -qi '^mysql://\|^mysql+pymysql://'; then
 
 elif echo "$RECORDER_URL" | grep -qi '^sqlite:///'; then
     ENGINE="sqlite"
-    DB_PATH=$(echo "$RECORDER_URL" | sed 's|^sqlite:///||')
+    SRC_PATH=$(echo "$RECORDER_URL" | sed 's|^sqlite:///||')
+    DB_COPY="/data/ha_recorder.db"
 
-    # Use SQLite URI filename format with mode=ro so the driver does not
-    # attempt to create journal/WAL/SHM files on the read-only mount.
-    DB_URI="file:${DB_PATH}?mode=ro"
+    # Create a consistent snapshot using SQLite's VACUUM INTO, which
+    # only needs read access to the source and writes a brand-new,
+    # self-contained DB file. No lock files (-wal/-shm) are created on
+    # the read-only /config mount.
+    bashio::log.info "Creating consistent snapshot: ${SRC_PATH} → ${DB_COPY} ..."
+    rm -f "$DB_COPY"
+    sqlite3 "file:${SRC_PATH}?mode=ro&immutable=1" "VACUUM INTO '${DB_COPY}';"
 
+    # Pass the plain file path to Metabase. The SQLite driver's
+    # confirm_file_is_sqlite check opens the value as a regular file,
+    # so URI query parameters (e.g. ?mode=ro) cause a
+    # FileNotFoundException.
     curl -sf -X POST "${MB_URL}/api/database" \
         -H "Content-Type: application/json" \
         -H "X-Metabase-Session: ${SESSION}" \
@@ -175,11 +184,11 @@ elif echo "$RECORDER_URL" | grep -qi '^sqlite:///'; then
             \"engine\": \"${ENGINE}\",
             \"name\": \"Home Assistant\",
             \"details\": {
-                \"db\": \"${DB_URI}\"
+                \"db\": \"${DB_COPY}\"
             }
         }" >/dev/null
 
-    bashio::log.info "SQLite database connected (read-only): ${DB_PATH}"
+    bashio::log.info "SQLite database connected (copy): ${DB_COPY}"
 
 else
     bashio::log.warning "Unsupported recorder DB URL scheme: ${RECORDER_URL}"
