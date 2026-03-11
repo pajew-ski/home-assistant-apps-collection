@@ -80,8 +80,9 @@ server {
         sub_filter '</head>' '<link rel="stylesheet" href="/ha-theme.css"></head>';
         sub_filter_once on;
 
-        # Remove X-Frame-Options so HA can embed in its own frame
+        # Remove framing restrictions so HA can embed in its own iframe
         proxy_hide_header X-Frame-Options;
+        proxy_hide_header Content-Security-Policy;
     }
 }
 NGINX
