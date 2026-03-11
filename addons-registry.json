@@ -34,15 +34,6 @@
       "sync_files": [],
       "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-oxigraph",
       "custom_dockerfile": true
-    },
-    {
-      "slug": "metabase",
-      "name": "Metabase Analytics",
-      "source": "https://github.com/metabase/metabase",
-      "branch": "master",
-      "sync_files": [],
-      "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-metabase",
-      "custom_dockerfile": true
     }
   ]
 }
