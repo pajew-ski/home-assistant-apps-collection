@@ -165,14 +165,11 @@ elif echo "$RECORDER_URL" | grep -qi '^sqlite:///'; then
     SRC_PATH=$(echo "$RECORDER_URL" | sed 's|^sqlite:///||')
     DB_COPY="/data/ha_recorder.db"
 
-    # Copy the SQLite DB to /data/ (writable) so Metabase can create the
-    # journal/WAL/SHM files it needs. This keeps /config mounted read-only
-    # and avoids any risk of Metabase corrupting the live HA database.
-    bashio::log.info "Copying ${SRC_PATH} → ${DB_COPY} ..."
-    cp -f "$SRC_PATH" "$DB_COPY"
-    # Also copy WAL/SHM if they exist, so the copy is consistent
-    [ -f "${SRC_PATH}-wal" ] && cp -f "${SRC_PATH}-wal" "${DB_COPY}-wal"
-    [ -f "${SRC_PATH}-shm" ] && cp -f "${SRC_PATH}-shm" "${DB_COPY}-shm"
+    # Use SQLite's online backup API to create a consistent snapshot in
+    # /data/ (writable). This handles WAL checkpointing and locking
+    # correctly even while HA is actively writing to the source DB.
+    bashio::log.info "Creating consistent snapshot: ${SRC_PATH} → ${DB_COPY} ..."
+    sqlite3 "$SRC_PATH" ".backup '${DB_COPY}'"
 
     # Pass the plain file path to Metabase. The SQLite driver's
     # confirm_file_is_sqlite check opens the value as a regular file,

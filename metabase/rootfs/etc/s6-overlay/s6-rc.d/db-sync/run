@@ -14,8 +14,6 @@ bashio::log.info "db-sync: refreshing ${DB_COPY} from ${HA_SQLITE} every ${INTER
 
 while true; do
     sleep "$INTERVAL"
-    cp -f "$HA_SQLITE" "$DB_COPY"
-    [ -f "${HA_SQLITE}-wal" ] && cp -f "${HA_SQLITE}-wal" "${DB_COPY}-wal"
-    [ -f "${HA_SQLITE}-shm" ] && cp -f "${HA_SQLITE}-shm" "${DB_COPY}-shm"
-    bashio::log.debug "db-sync: copy refreshed."
+    sqlite3 "$HA_SQLITE" ".backup '${DB_COPY}'"
+    bashio::log.debug "db-sync: snapshot refreshed."
 done

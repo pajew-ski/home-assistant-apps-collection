@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3 \
         curl \
         jq \
+        sqlite3 \
     && rm -rf /var/lib/apt/lists/* \
     && rm -f /etc/nginx/sites-enabled/default
 
