@@ -1,0 +1,40 @@
+name: Prefect Server
+description: >-
+  Prefect v3 Workflow-Orchestrierung direkt in Home Assistant.
+  Erstelle, plane und ueberwache Daten-Pipelines und Automationen ueber das
+  integrierte Prefect-Dashboard (Ingress). Optionaler externer API-Zugriff
+  mit Authentifizierung fuer Remote-Worker und CI/CD-Pipelines.
+version: "3.6.21.1"
+slug: prefect-server
+url: "https://github.com/PrefectHQ/prefect"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+ingress: true
+ingress_port: 8099
+ingress_entry: ""
+panel_icon: "mdi:pipe"
+panel_title: "Prefect"
+panel_admin: true
+ports:
+  4200/tcp: null
+ports_description:
+  4200/tcp: "Prefect API – extern (nur aktiv wenn network_access aktiviert ist)"
+map:
+  - data:rw
+options:
+  auth_type: "none"
+  username: ""
+  password: ""
+  bearer_token: ""
+  network_access: false
+schema:
+  auth_type: "list(none|basic|bearer)"
+  username: "str"
+  password: "password"
+  bearer_token: "password"
+  network_access: "bool"
+image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-prefect-server"
