@@ -21,14 +21,16 @@ RUN python3 -m venv /opt/prefect && \
 # Add virtualenv to PATH
 ENV PATH="/opt/prefect/bin:${PATH}"
 
-# Prefect configuration
+# Prefect configuration – server listens on internal port 4201;
+# nginx exposes 8099 (ingress) and optionally 4200 (external).
 ENV PREFECT_HOME="/data/prefect" \
     PREFECT_SERVER_API_HOST="127.0.0.1" \
-    PREFECT_SERVER_API_PORT="4200" \
-    PREFECT_API_URL="http://127.0.0.1:4200/api" \
+    PREFECT_SERVER_API_PORT="4201" \
+    PREFECT_API_URL="http://127.0.0.1:4201/api" \
     PREFECT_SERVER_DATABASE_CONNECTION_URL="sqlite+aiosqlite:////data/prefect/prefect.db" \
     PREFECT_UI_ENABLED="true" \
-    PREFECT_SERVER_CSRF_PROTECTION_ENABLED="false"
+    PREFECT_SERVER_CSRF_PROTECTION_ENABLED="false" \
+    PREFECT_SERVER_ANALYTICS_ENABLED="false"
 
 # Copy rootfs (s6-overlay services)
 COPY rootfs /
