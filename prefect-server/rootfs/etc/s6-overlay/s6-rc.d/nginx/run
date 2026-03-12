@@ -3,6 +3,10 @@
 # Configure and start nginx – ingress + optional external access
 # ==============================================================================
 
+INTERNAL_PORT=4201          # Prefect server internal port
+INGRESS_PORT=8099           # HA ingress port
+EXTERNAL_PORT=4200          # External access port (exposed to network)
+
 # Clean up previous configs
 rm -f /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf
 
@@ -12,7 +16,7 @@ NETWORK_ACCESS=$(bashio::config 'network_access')
 # Wait for Prefect to be ready
 bashio::log.info "Waiting for Prefect Server to become available..."
 for i in $(seq 1 60); do
-    if curl -sf http://127.0.0.1:4200/api/health > /dev/null 2>&1; then
+    if curl -sf "http://127.0.0.1:${INTERNAL_PORT}/api/health" > /dev/null 2>&1; then
         bashio::log.info "Prefect Server is ready."
         break
     fi
@@ -21,52 +25,6 @@ for i in $(seq 1 60); do
     fi
     sleep 1
 done
-
-# ---------------------------------------------------------------------------
-# Ingress server – only accessible from HA supervisor (172.30.32.2)
-# ---------------------------------------------------------------------------
-bashio::log.info "Configuring ingress on port 8099..."
-
-cat > /etc/nginx/conf.d/ingress.conf <<'NGINX'
-server {
-    listen 8099;
-    allow 172.30.32.2;
-    deny  all;
-
-    location / {
-        proxy_pass         http://127.0.0.1:4200/;
-        proxy_http_version 1.1;
-        proxy_set_header   Host              $http_host;
-        proxy_set_header   Upgrade           $http_upgrade;
-        proxy_set_header   Connection        $connection_upgrade;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-        proxy_buffering    off;
-
-        # Prefect UI uses Server-Sent Events for real-time updates
-        proxy_read_timeout    86400s;
-        proxy_send_timeout    86400s;
-        proxy_connect_timeout 60s;
-
-        # Sub-filter to rewrite API base URL for ingress path
-        sub_filter_once off;
-        sub_filter_types application/javascript text/html;
-    }
-
-    # Prefect API endpoint
-    location /api/ {
-        proxy_pass         http://127.0.0.1:4200/api/;
-        proxy_http_version 1.1;
-        proxy_set_header   Host              $http_host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-        proxy_buffering    off;
-        proxy_read_timeout 86400s;
-    }
-}
-NGINX
 
 # ---------------------------------------------------------------------------
 # WebSocket upgrade map (required for all server blocks)
@@ -79,10 +37,65 @@ map $http_upgrade $connection_upgrade {
 NGINX
 
 # ---------------------------------------------------------------------------
+# Ingress server – only accessible from HA supervisor (172.30.32.2)
+#
+# The Prefect UI (a SPA) makes absolute API calls to "/api/...".
+# Through HA ingress those would bypass the ingress proxy and hit HA's own
+# REST API instead. We use sub_filter to rewrite absolute "/api" references
+# to relative "./api" so the browser resolves them against the ingress
+# base path, e.g.  /api/hassio_ingress/<token>/api/...
+# ---------------------------------------------------------------------------
+bashio::log.info "Configuring ingress on port ${INGRESS_PORT}..."
+
+cat > /etc/nginx/conf.d/ingress.conf <<NGINX
+server {
+    listen ${INGRESS_PORT};
+    allow 172.30.32.2;
+    deny  all;
+
+    # Rewrite absolute /api paths to relative ./api for ingress SPA support.
+    # Only applied to HTML and JS responses (not JSON API responses).
+    sub_filter_once off;
+    sub_filter_types application/javascript text/javascript;
+    sub_filter '"/api'  '"./api';
+    sub_filter "'/api"  "'./api";
+
+    location / {
+        proxy_pass         http://127.0.0.1:${INTERNAL_PORT}/;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              \$http_host;
+        proxy_set_header   Upgrade           \$http_upgrade;
+        proxy_set_header   Connection        \$connection_upgrade;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
+        proxy_buffering    off;
+
+        # Prefect UI uses Server-Sent Events for real-time updates
+        proxy_read_timeout    86400s;
+        proxy_send_timeout    86400s;
+        proxy_connect_timeout 60s;
+    }
+
+    # Prefect API endpoint
+    location /api/ {
+        proxy_pass         http://127.0.0.1:${INTERNAL_PORT}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              \$http_host;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
+        proxy_buffering    off;
+        proxy_read_timeout 86400s;
+    }
+}
+NGINX
+
+# ---------------------------------------------------------------------------
 # External server – optional, with authentication
 # ---------------------------------------------------------------------------
 if [ "${NETWORK_ACCESS}" = "true" ]; then
-    bashio::log.info "External access enabled on port 4200."
+    bashio::log.info "External access enabled on port ${EXTERNAL_PORT}."
 
     case "${AUTH_TYPE}" in
         basic)
@@ -100,13 +113,13 @@ if [ "${NETWORK_ACCESS}" = "true" ]; then
 
             cat > /etc/nginx/conf.d/external.conf <<NGINX
 server {
-    listen 4200;
+    listen ${EXTERNAL_PORT};
 
     auth_basic           "Prefect Server";
     auth_basic_user_file /etc/nginx/.htpasswd;
 
     location / {
-        proxy_pass         http://127.0.0.1:4200/;
+        proxy_pass         http://127.0.0.1:${INTERNAL_PORT}/;
         proxy_http_version 1.1;
         proxy_set_header   Host              \$http_host;
         proxy_set_header   Upgrade           \$http_upgrade;
@@ -138,25 +151,25 @@ map \$http_authorization \$bearer_valid {
 }
 NGINX
 
-            cat > /etc/nginx/conf.d/external.conf <<'NGINX'
+            cat > /etc/nginx/conf.d/external.conf <<NGINX
 server {
-    listen 4200;
+    listen ${EXTERNAL_PORT};
 
-    if ($bearer_valid = 0) {
+    if (\$bearer_valid = 0) {
         return 401;
     }
 
     add_header WWW-Authenticate 'Bearer realm="Prefect Server"' always;
 
     location / {
-        proxy_pass         http://127.0.0.1:4200/;
+        proxy_pass         http://127.0.0.1:${INTERNAL_PORT}/;
         proxy_http_version 1.1;
-        proxy_set_header   Host              $http_host;
-        proxy_set_header   Upgrade           $http_upgrade;
-        proxy_set_header   Connection        $connection_upgrade;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Host              \$http_host;
+        proxy_set_header   Upgrade           \$http_upgrade;
+        proxy_set_header   Connection        \$connection_upgrade;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
         proxy_buffering    off;
         proxy_read_timeout 86400s;
     }
@@ -169,19 +182,19 @@ NGINX
             bashio::log.warning " Set auth_type to 'basic' or 'bearer'."
             bashio::log.warning "============================================="
 
-            cat > /etc/nginx/conf.d/external.conf <<'NGINX'
+            cat > /etc/nginx/conf.d/external.conf <<NGINX
 server {
-    listen 4200;
+    listen ${EXTERNAL_PORT};
 
     location / {
-        proxy_pass         http://127.0.0.1:4200/;
+        proxy_pass         http://127.0.0.1:${INTERNAL_PORT}/;
         proxy_http_version 1.1;
-        proxy_set_header   Host              $http_host;
-        proxy_set_header   Upgrade           $http_upgrade;
-        proxy_set_header   Connection        $connection_upgrade;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Host              \$http_host;
+        proxy_set_header   Upgrade           \$http_upgrade;
+        proxy_set_header   Connection        \$connection_upgrade;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
         proxy_buffering    off;
         proxy_read_timeout 86400s;
     }
