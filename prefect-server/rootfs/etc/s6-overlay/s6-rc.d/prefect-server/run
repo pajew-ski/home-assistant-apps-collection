@@ -1,0 +1,12 @@
+#!/command/with-contenv bashio
+# ==============================================================================
+# Start Prefect Server
+# ==============================================================================
+
+bashio::log.info "Preparing Prefect Server data directory..."
+mkdir -p /data/prefect
+
+bashio::log.info "Starting Prefect Server on 127.0.0.1:4200..."
+exec /opt/prefect/bin/prefect server start \
+    --host 127.0.0.1 \
+    --port 4200

@@ -34,6 +34,15 @@
       "sync_files": [],
       "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-oxigraph",
       "custom_dockerfile": true
+    },
+    {
+      "slug": "prefect-server",
+      "name": "Prefect Server",
+      "source": "https://github.com/PrefectHQ/prefect",
+      "branch": "main",
+      "sync_files": [],
+      "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-prefect-server",
+      "custom_dockerfile": true
     }
   ]
 }
