@@ -21,6 +21,7 @@ A single-link Home Assistant add-on repository that aggregates multiple add-ons.
 | [Open Desensitizer](./open-desensitizer/) | 2026.3.6 | Bilateral stimulation tool for stress reduction and relaxation via guided eye movement. | [pajew-ski/open-desensitizer](https://github.com/pajew-ski/open-desensitizer) |
 | [Oxigraph](./oxigraph/) | 0.5.5 | SPARQL 1.1 triple store and RDF graph database with built-in YASGUI query interface. | [oxigraph/oxigraph](https://github.com/oxigraph/oxigraph) |
 | [Prefect Server](./prefect-server/) | 3.6.21 | Prefect v3 workflow orchestration server with dashboard, ingress, and authentication. | [PrefectHQ/prefect](https://github.com/PrefectHQ/prefect) |
+| [Exocortex](./exocortex/) | 1.0.0.1 | Knowledge operating system with hybrid search, SPARQL graph, AI agent memory, and MCP server. | [pajew-ski/home-assistant-apps-collection](https://github.com/pajew-ski/home-assistant-apps-collection) |
 
 ## How It Works
 

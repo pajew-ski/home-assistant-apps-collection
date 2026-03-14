@@ -43,6 +43,15 @@
       "sync_files": [],
       "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-prefect-server",
       "custom_dockerfile": true
+    },
+    {
+      "slug": "exocortex",
+      "name": "Exocortex",
+      "source": "https://github.com/pajew-ski/home-assistant-apps-collection",
+      "branch": "main",
+      "sync_files": [],
+      "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-exocortex",
+      "custom_dockerfile": true
     }
   ]
 }

@@ -1,0 +1,39 @@
+#!/command/with-contenv bash
+# shellcheck shell=bash
+set -e
+
+echo "[api] Starting Exocortex API server..."
+
+# Wait for engines to be ready
+for port in 6379 7700 7878; do
+    echo "[api] Waiting for service on port ${port}..."
+    for i in $(seq 1 30); do
+        if curl -sf "http://127.0.0.1:${port}" >/dev/null 2>&1 || \
+           redis-cli -p 6379 ping >/dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+    done
+done
+
+# Qdrant may be disabled
+if [ "${ENABLE_SEMANTIC_SEARCH:-true}" = "true" ]; then
+    echo "[api] Waiting for Qdrant on port 6333..."
+    for i in $(seq 1 30); do
+        if curl -sf "http://127.0.0.1:6333/healthz" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+    done
+fi
+
+echo "[api] All engines ready. Starting FastAPI..."
+
+export PYTHONPATH="/opt/exocortex/app"
+
+exec /opt/exocortex/bin/uvicorn \
+    exocortex.main:app \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --workers 1 \
+    --log-level "${LOG_LEVEL:-info}"

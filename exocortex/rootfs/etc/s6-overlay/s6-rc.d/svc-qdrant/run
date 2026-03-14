@@ -1,0 +1,29 @@
+#!/command/with-contenv bash
+# shellcheck shell=bash
+set -e
+
+ENABLE_SEMANTIC="${ENABLE_SEMANTIC_SEARCH:-true}"
+
+if [ "$ENABLE_SEMANTIC" = "false" ]; then
+    echo "[qdrant] Semantic search disabled. Qdrant will not start."
+    # Sleep forever so s6 doesn't restart
+    exec sleep infinity
+fi
+
+echo "[qdrant] Starting Qdrant vector database..."
+
+mkdir -p /data/qdrant/storage /data/qdrant/snapshots
+
+cat > /data/qdrant/config.yaml <<EOF
+storage:
+  storage_path: /data/qdrant/storage
+  snapshots_path: /data/qdrant/snapshots
+  on_disk_payload: true
+service:
+  host: 127.0.0.1
+  http_port: 6333
+  grpc_port: 6334
+log_level: INFO
+EOF
+
+exec qdrant --config-path /data/qdrant/config.yaml

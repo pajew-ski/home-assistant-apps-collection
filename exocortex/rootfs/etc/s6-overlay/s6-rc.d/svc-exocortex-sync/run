@@ -1,0 +1,17 @@
+#!/command/with-contenv bash
+# shellcheck shell=bash
+set -e
+
+echo "[sync] Starting Exocortex sync daemon..."
+
+# Wait for API to be ready
+for i in $(seq 1 30); do
+    if curl -sf "http://127.0.0.1:8000/api/health" >/dev/null 2>&1; then
+        break
+    fi
+    sleep 1
+done
+
+export PYTHONPATH="/opt/exocortex/app"
+
+exec /opt/exocortex/bin/python -m exocortex.sync.daemon
