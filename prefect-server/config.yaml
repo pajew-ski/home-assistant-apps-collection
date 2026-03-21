@@ -4,7 +4,7 @@ description: >-
   Erstelle, plane und ueberwache Daten-Pipelines und Automationen ueber das
   integrierte Prefect-Dashboard (Ingress). Optionaler externer API-Zugriff
   mit Authentifizierung fuer Remote-Worker und CI/CD-Pipelines.
-version: "3.6.22.1"
+version: "3.6.23.1"
 slug: prefect-server
 url: "https://github.com/PrefectHQ/prefect"
 arch:
