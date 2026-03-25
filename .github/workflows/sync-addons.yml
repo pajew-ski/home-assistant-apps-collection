@@ -542,3 +542,88 @@ jobs:
           git diff --cached --quiet || \
             git commit -m "chore(prefect-server): sync to v${{ steps.prefect_server.outputs.upstream }}"
           git push
+
+      # -----------------------------------------------------------------------
+      # gcp-kafka – Telecom NetOps Platform (custom Dockerfile)
+      # -----------------------------------------------------------------------
+      - name: Check gcp-kafka for updates
+        id: gcp_kafka
+        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'gcp-kafka' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Custom add-on: version is controlled in-repo.
+          # Rebuild only on force or when config.yaml version is bumped manually.
+          CURRENT_VERSION=$(grep '^version:' gcp-kafka/config.yaml \
+            | awk '{print $2}' | tr -d '"')
+
+          echo "current=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ inputs.force }}" = "true" ]; then
+            # Increment packaging suffix
+            BASE_VER=$(echo "$CURRENT_VERSION" | sed 's/\.[0-9]*$//')
+            PATCH=$(echo "$CURRENT_VERSION" | sed 's/.*\.\([0-9]*\)$/\1/')
+            NEW_VERSION="${BASE_VER}.$((PATCH + 1))"
+            echo "needs_update=true"          >> "$GITHUB_OUTPUT"
+            echo "new_version=$NEW_VERSION"   >> "$GITHUB_OUTPUT"
+            echo "Force rebuild: $CURRENT_VERSION → $NEW_VERSION"
+          else
+            echo "needs_update=false"         >> "$GITHUB_OUTPUT"
+            echo "new_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+            echo "gcp-kafka at $CURRENT_VERSION (no force rebuild requested)"
+          fi
+
+      - name: Build and push gcp-kafka Docker images
+        if: steps.gcp_kafka.outputs.needs_update == 'true'
+        env:
+          NEW_VERSION: ${{ steps.gcp_kafka.outputs.new_version }}
+          REGISTRY: ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection
+        run: |
+          declare -A PLATFORM_MAP=(
+            [amd64]=linux/amd64
+            [aarch64]=linux/arm64
+          )
+
+          for ARCH in amd64 aarch64; do
+            BASE_IMAGE="ghcr.io/home-assistant/${ARCH}-base-ubuntu:latest"
+            PLATFORM="${PLATFORM_MAP[$ARCH]}"
+            IMAGE_TAG="${REGISTRY}/${ARCH}-gcp-kafka"
+
+            echo "Building $IMAGE_TAG:$NEW_VERSION for $PLATFORM …"
+            docker buildx build \
+              --platform "$PLATFORM" \
+              --build-arg BUILD_FROM="$BASE_IMAGE" \
+              --build-arg BUILD_ARCH="$ARCH" \
+              --tag "${IMAGE_TAG}:${NEW_VERSION}" \
+              --tag "${IMAGE_TAG}:latest" \
+              --push \
+              gcp-kafka/
+          done
+
+          sed -i "s/^version:.*/version: \"$NEW_VERSION\"/" gcp-kafka/config.yaml
+
+      - name: Make gcp-kafka packages public
+        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'gcp-kafka' }}
+        env:
+          GH_TOKEN: ${{ secrets.PAT_PACKAGES || secrets.GITHUB_TOKEN }}
+        run: |
+          for ARCH in amd64 aarch64; do
+            PACKAGE="home-assistant-apps-collection%2F${ARCH}-gcp-kafka"
+            gh api --method PATCH \
+              -H "Accept: application/vnd.github+json" \
+              "/user/packages/container/${PACKAGE}" \
+              -f visibility=public \
+              2>/dev/null \
+              && echo "${ARCH}-gcp-kafka → public" \
+              || echo "${ARCH}-gcp-kafka: visibility update skipped (may already be public or token lacks scope)"
+          done
+
+      - name: Commit and push gcp-kafka changes
+        if: steps.gcp_kafka.outputs.needs_update == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add gcp-kafka/
+          git diff --cached --quiet || \
+            git commit -m "chore(gcp-kafka): rebuild v${{ steps.gcp_kafka.outputs.new_version }}"
+          git push

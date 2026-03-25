@@ -1,0 +1,51 @@
+#!/command/with-contenv bashio
+# ==============================================================================
+# Start Open Policy Agent (OPA)
+# ==============================================================================
+
+OPA_DATA="/data/opa"
+mkdir -p "${OPA_DATA}/policies" "${OPA_DATA}/bundles"
+
+# Create default telecom network policy if none exists
+if [ ! -f "${OPA_DATA}/policies/network.rego" ]; then
+    bashio::log.info "Creating default OPA network policy..."
+    cat > "${OPA_DATA}/policies/network.rego" <<'REGO'
+package telecom.network
+
+# Default deny
+default allow := false
+
+# Allow read access to network topology
+allow if {
+    input.action == "read"
+    input.resource == "topology"
+}
+
+# Allow authenticated users to modify network config
+allow if {
+    input.action == "write"
+    input.resource == "config"
+    input.user.authenticated == true
+}
+
+# Allow automated agents to perform optimization
+allow if {
+    input.action == "optimize"
+    input.user.role == "agent"
+    input.user.authenticated == true
+}
+
+# Deny modifications during maintenance window
+deny if {
+    input.action == "write"
+    input.maintenance_mode == true
+}
+REGO
+fi
+
+bashio::log.info "Starting Open Policy Agent on 127.0.0.1:8181..."
+exec /usr/local/bin/opa run \
+    --server \
+    --addr "127.0.0.1:8181" \
+    --log-level info \
+    "${OPA_DATA}/policies/"

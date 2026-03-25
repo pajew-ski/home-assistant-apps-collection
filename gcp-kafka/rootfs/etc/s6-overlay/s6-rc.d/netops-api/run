@@ -1,0 +1,44 @@
+#!/command/with-contenv bashio
+# ==============================================================================
+# Start NetOps FastAPI application
+# ==============================================================================
+
+mkdir -p /data/netops
+
+# Export HA options as environment variables for the Python app
+export NEO4J_PASSWORD=$(bashio::config 'neo4j_password')
+export LLM_API_KEY=$(bashio::config 'llm_api_key')
+export LLM_API_URL=$(bashio::config 'llm_api_url')
+export LLM_MODEL=$(bashio::config 'llm_model')
+export KAFKA_BROKER="127.0.0.1:9092"
+export NEO4J_URI="bolt://127.0.0.1:7687"
+export OPA_URL="http://127.0.0.1:8181"
+
+# Wait for backend services
+bashio::log.info "Waiting for Kafka..."
+for i in $(seq 1 60); do
+    if nc -z 127.0.0.1 9092 2>/dev/null; then
+        bashio::log.info "Kafka is ready."
+        break
+    fi
+    [ "$i" -eq 60 ] && bashio::log.warning "Kafka not ready after 60s, starting anyway..."
+    sleep 1
+done
+
+bashio::log.info "Waiting for Neo4j..."
+for i in $(seq 1 90); do
+    if nc -z 127.0.0.1 7687 2>/dev/null; then
+        bashio::log.info "Neo4j is ready."
+        break
+    fi
+    [ "$i" -eq 90 ] && bashio::log.warning "Neo4j not ready after 90s, starting anyway..."
+    sleep 1
+done
+
+bashio::log.info "Starting NetOps API on 127.0.0.1:8080..."
+exec /opt/netops-venv/bin/uvicorn \
+    opt.netops.app:app \
+    --host 127.0.0.1 \
+    --port 8080 \
+    --app-dir / \
+    --log-level info

@@ -43,6 +43,15 @@
       "sync_files": [],
       "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-prefect-server",
       "custom_dockerfile": true
+    },
+    {
+      "slug": "gcp-kafka",
+      "name": "Telecom NetOps Platform",
+      "source": "https://github.com/pajew-ski/home-assistant-apps-collection",
+      "branch": "main",
+      "sync_files": [],
+      "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-gcp-kafka",
+      "custom_dockerfile": true
     }
   ]
 }

@@ -1,0 +1,52 @@
+#!/command/with-contenv bashio
+# ==============================================================================
+# Start Neo4j Community Edition
+# ==============================================================================
+
+NEO4J_DATA="/data/neo4j"
+mkdir -p "${NEO4J_DATA}/data" "${NEO4J_DATA}/logs"
+
+NEO4J_PASSWORD=$(bashio::config 'neo4j_password')
+NEO4J_EXTERNAL=$(bashio::config 'neo4j_external')
+
+# Bind to localhost by default, 0.0.0.0 if external access enabled
+LISTEN_ADDR="127.0.0.1"
+if [ "${NEO4J_EXTERNAL}" = "true" ]; then
+    LISTEN_ADDR="0.0.0.0"
+    bashio::log.warning "Neo4j exposed externally on ports 7474 (HTTP) and 7687 (Bolt)."
+fi
+
+# Neo4j configuration
+export NEO4J_HOME="/opt/neo4j"
+cat > /opt/neo4j/conf/neo4j.conf <<EOF
+# Directories
+server.directories.data=${NEO4J_DATA}/data
+server.directories.logs=${NEO4J_DATA}/logs
+
+# Network connectors
+server.http.enabled=true
+server.http.listen_address=${LISTEN_ADDR}:7474
+server.bolt.enabled=true
+server.bolt.listen_address=${LISTEN_ADDR}:7687
+
+# Authentication
+dbms.security.auth_enabled=true
+initial.dbms.default_database=neo4j
+
+# Memory settings (conservative for HA add-on)
+server.memory.heap.initial_size=256m
+server.memory.heap.max_size=512m
+server.memory.pagecache.size=128m
+
+# Disable analytics
+dbms.usage_report.enabled=false
+EOF
+
+# Set initial password if database is fresh
+if [ ! -d "${NEO4J_DATA}/data/databases" ]; then
+    bashio::log.info "Setting initial Neo4j password..."
+    /opt/neo4j/bin/neo4j-admin dbms set-initial-password "${NEO4J_PASSWORD}" 2>/dev/null || true
+fi
+
+bashio::log.info "Starting Neo4j..."
+exec /opt/neo4j/bin/neo4j console

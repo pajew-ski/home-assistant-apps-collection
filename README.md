@@ -21,6 +21,7 @@ A single-link Home Assistant add-on repository that aggregates multiple add-ons.
 | [Open Desensitizer](./open-desensitizer/) | 2026.3.6 | Bilateral stimulation tool for stress reduction and relaxation via guided eye movement. | [pajew-ski/open-desensitizer](https://github.com/pajew-ski/open-desensitizer) |
 | [Oxigraph](./oxigraph/) | 0.5.5 | SPARQL 1.1 triple store and RDF graph database with built-in YASGUI query interface. | [oxigraph/oxigraph](https://github.com/oxigraph/oxigraph) |
 | [Prefect Server](./prefect-server/) | 3.6.21 | Prefect v3 workflow orchestration server with dashboard, ingress, and authentication. | [PrefectHQ/prefect](https://github.com/PrefectHQ/prefect) |
+| [Telecom NetOps Platform](./gcp-kafka/) | 0.1.0 | Real-time telecom network operations with Kafka, Spark, Neo4j, OpenCV, OPA, and LLM agents. | custom |
 
 ## How It Works
 

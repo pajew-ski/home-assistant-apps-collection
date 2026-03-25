@@ -1,0 +1,60 @@
+name: Telecom NetOps Platform
+description: >-
+  Echtzeit-Telekommunikations-Netzwerkmanagement als Home Assistant Add-on.
+  Kombiniert Apache Kafka (Event-Streaming), Apache Spark (Stream-Processing),
+  OpenCV (Computer Vision fuer Infrastruktur-Inspektionen), Neo4j (Graph-Datenbank
+  fuer Netzwerk-Topologie und Digital Twin), Open Policy Agent (Governance und
+  Zugriffskontrolle) sowie LLM-basierte autonome Netzwerk-Optimierung via
+  Model Context Protocol (MCP). Alle Komponenten laufen lokal ohne Cloud-Abhaengigkeiten.
+version: "0.1.0"
+slug: gcp-kafka
+url: "https://github.com/pajew-ski/home-assistant-apps-collection"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+ingress: true
+ingress_port: 8099
+ingress_entry: ""
+panel_icon: "mdi:network"
+panel_title: "NetOps"
+panel_admin: true
+ports:
+  9080/tcp: null
+  9092/tcp: null
+  7474/tcp: null
+  7687/tcp: null
+ports_description:
+  9080/tcp: "NetOps Dashboard – extern (nur aktiv wenn network_access aktiviert ist)"
+  9092/tcp: "Kafka Broker – extern (nur aktiv wenn kafka_external aktiviert ist)"
+  7474/tcp: "Neo4j Browser – extern (nur aktiv wenn neo4j_external aktiviert ist)"
+  7687/tcp: "Neo4j Bolt – extern (nur aktiv wenn neo4j_external aktiviert ist)"
+map:
+  - data:rw
+options:
+  auth_type: "none"
+  username: ""
+  password: ""
+  bearer_token: ""
+  network_access: false
+  kafka_external: false
+  neo4j_external: false
+  neo4j_password: "neo4j"
+  llm_api_key: ""
+  llm_api_url: ""
+  llm_model: "claude-sonnet-4-20250514"
+schema:
+  auth_type: "list(none|basic|bearer)"
+  username: "str"
+  password: "password"
+  bearer_token: "password"
+  network_access: "bool"
+  kafka_external: "bool"
+  neo4j_external: "bool"
+  neo4j_password: "password"
+  llm_api_key: "password"
+  llm_api_url: "str"
+  llm_model: "str"
+image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-gcp-kafka"
