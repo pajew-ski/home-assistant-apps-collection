@@ -1,0 +1,18 @@
+#!/command/with-contenv bash
+# shellcheck shell=bash
+set -e
+
+echo "[meilisearch] Starting MeiliSearch..."
+
+ARGS=(
+    --db-path /data/meilisearch
+    --http-addr 127.0.0.1:7700
+    --max-indexing-memory 200Mb
+    --env production
+)
+
+if [ -n "${MEILI_MASTER_KEY:-}" ]; then
+    ARGS+=(--master-key "$MEILI_MASTER_KEY")
+fi
+
+exec meilisearch "${ARGS[@]}"

@@ -1,0 +1,56 @@
+name: Exocortex
+version: "1.0.0.1"
+slug: exocortex
+description: >-
+  The all-encompassing cybernetic extension for Home Assistant.
+  A complete knowledge operating system with bidirectional Git sync,
+  hybrid search (fulltext + semantic + graph), AI agent memory,
+  MCP server, and an Obsidian-grade editor — all in a single container.
+url: "https://github.com/pajew-ski/home-assistant-apps-collection"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+ingress: true
+ingress_port: 8000
+ingress_stream: true
+panel_icon: "mdi:brain"
+panel_title: "Exocortex"
+panel_admin: false
+ports:
+  7878/tcp: null
+ports_description:
+  7878/tcp: "Oxigraph SPARQL endpoint (optional)"
+map:
+  - addon_config:rw
+  - ssl:ro
+  - media:rw
+options:
+  github_repo: ""
+  github_token: ""
+  github_branch: "main"
+  sync_interval_minutes: 5
+  webhook_secret: ""
+  embedding_model: "all-MiniLM-L6-v2"
+  meilisearch_master_key: ""
+  redis_password: ""
+  auto_push: true
+  auto_create_on_conflict: true
+  enable_semantic_search: true
+  log_level: "info"
+schema:
+  github_repo: "str"
+  github_token: "password"
+  github_branch: "str"
+  sync_interval_minutes: "int(1,60)"
+  webhook_secret: "password?"
+  embedding_model: "str"
+  meilisearch_master_key: "password"
+  redis_password: "password?"
+  auto_push: "bool"
+  auto_create_on_conflict: "bool"
+  enable_semantic_search: "bool"
+  log_level: "list(debug|info|warning|error)"
+image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-exocortex"

@@ -1,0 +1,10 @@
+#!/command/with-contenv bash
+# shellcheck shell=bash
+set -e
+
+echo "[oxigraph] Starting Oxigraph SPARQL server..."
+mkdir -p /data/oxigraph
+
+exec oxigraph serve \
+    --location /data/oxigraph \
+    --bind 127.0.0.1:7878
