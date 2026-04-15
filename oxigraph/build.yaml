@@ -1,8 +1,0 @@
-build_from:
-    amd64: ghcr.io/home-assistant/amd64-base-ubuntu:latest
-    aarch64: ghcr.io/home-assistant/aarch64-base-ubuntu:latest
-labels:
-    org.opencontainers.image.title: "Oxigraph"
-    org.opencontainers.image.description: "SPARQL 1.1 triple store and RDF graph database"
-    org.opencontainers.image.source: "https://github.com/pajew-ski/home-assistant-apps-collection"
-    org.opencontainers.image.licenses: "MIT AND Apache-2.0"
