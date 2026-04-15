@@ -27,24 +27,6 @@
       "static_app": true
     },
     {
-      "slug": "oxigraph",
-      "name": "Oxigraph",
-      "source": "https://github.com/oxigraph/oxigraph",
-      "branch": "main",
-      "sync_files": [],
-      "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-oxigraph",
-      "custom_dockerfile": true
-    },
-    {
-      "slug": "prefect-server",
-      "name": "Prefect Server",
-      "source": "https://github.com/PrefectHQ/prefect",
-      "branch": "main",
-      "sync_files": [],
-      "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-prefect-server",
-      "custom_dockerfile": true
-    },
-    {
       "slug": "exocortex",
       "name": "Exocortex",
       "source": "https://github.com/pajew-ski/home-assistant-apps-collection",

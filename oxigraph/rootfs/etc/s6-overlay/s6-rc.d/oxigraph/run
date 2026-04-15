@@ -1,9 +1,0 @@
-#!/usr/bin/with-contenv bashio
-set -e
-
-bashio::log.info "Starting Oxigraph SPARQL server on 127.0.0.1:7879..."
-mkdir -p /data/storage
-
-exec /usr/local/bin/oxigraph serve \
-    --location /data/storage \
-    --bind 127.0.0.1:7879

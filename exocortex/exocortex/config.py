@@ -40,6 +40,22 @@ class Config:
     # Logging
     log_level: str = "info"
 
+    # Home Assistant connection
+    ha_websocket_url: str = "ws://supervisor/core/websocket"
+    ha_supervisor_token: str = ""  # read from SUPERVISOR_TOKEN env var at runtime
+    ollama_url: str = "http://host.docker.internal:11434"
+    ollama_model: str = "llama3.2"
+    ha_mcp_url: str = ""
+
+    # Agent system
+    enable_agents: bool = True
+    agent_filter_domains: list[str] = field(default_factory=lambda: [
+        "light", "switch", "climate", "binary_sensor",
+        "sensor", "cover", "lock", "alarm_control_panel",
+    ])
+    agent_filter_min_change_interval_seconds: int = 5
+    agent_context_window_tokens: int = 4096
+
     @classmethod
     def from_env(cls) -> Config:
         """Load configuration from environment variables (set by init.sh)."""
@@ -47,6 +63,17 @@ class Config:
         redis_url = "redis://127.0.0.1:6379"
         if redis_password:
             redis_url = f"redis://:{redis_password}@127.0.0.1:6379"
+
+        # Agent filter domains
+        domains_raw = os.environ.get("AGENT_FILTER_DOMAINS", "")
+        agent_domains = (
+            [d.strip() for d in domains_raw.split(",") if d.strip()]
+            if domains_raw
+            else [
+                "light", "switch", "climate", "binary_sensor",
+                "sensor", "cover", "lock", "alarm_control_panel",
+            ]
+        )
 
         return cls(
             github_repo=os.environ.get("GITHUB_REPO", ""),
@@ -61,6 +88,19 @@ class Config:
             redis_password=redis_password,
             redis_url=redis_url,
             log_level=os.environ.get("LOG_LEVEL", "info"),
+            ha_websocket_url=os.environ.get("HA_WEBSOCKET_URL", "ws://supervisor/core/websocket"),
+            ha_supervisor_token=os.environ.get("SUPERVISOR_TOKEN", ""),
+            ollama_url=os.environ.get("OLLAMA_URL", "http://host.docker.internal:11434"),
+            ollama_model=os.environ.get("OLLAMA_MODEL", "llama3.2"),
+            ha_mcp_url=os.environ.get("HA_MCP_URL", ""),
+            enable_agents=os.environ.get("ENABLE_AGENTS", "true").lower() == "true",
+            agent_filter_domains=agent_domains,
+            agent_filter_min_change_interval_seconds=int(
+                os.environ.get("AGENT_FILTER_MIN_CHANGE_INTERVAL_SECONDS", "5")
+            ),
+            agent_context_window_tokens=int(
+                os.environ.get("AGENT_CONTEXT_WINDOW_TOKENS", "4096")
+            ),
         )
 
     @classmethod
@@ -90,6 +130,20 @@ class Config:
             redis_password=redis_password,
             redis_url=redis_url,
             log_level=opts.get("log_level", "info"),
+            ha_websocket_url=opts.get("ha_websocket_url", "ws://supervisor/core/websocket"),
+            ha_supervisor_token=os.environ.get("SUPERVISOR_TOKEN", ""),
+            ollama_url=opts.get("ollama_url", "http://host.docker.internal:11434"),
+            ollama_model=opts.get("ollama_model", "llama3.2"),
+            ha_mcp_url=opts.get("ha_mcp_url", ""),
+            enable_agents=opts.get("enable_agents", True),
+            agent_filter_domains=opts.get("agent_filter_domains", [
+                "light", "switch", "climate", "binary_sensor",
+                "sensor", "cover", "lock", "alarm_control_panel",
+            ]),
+            agent_filter_min_change_interval_seconds=opts.get(
+                "agent_filter_min_change_interval_seconds", 5,
+            ),
+            agent_context_window_tokens=opts.get("agent_context_window_tokens", 4096),
         )
 
 

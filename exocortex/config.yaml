@@ -23,6 +23,7 @@ ports:
   7878/tcp: null
 ports_description:
   7878/tcp: "Oxigraph SPARQL endpoint (optional)"
+hassio_api: homeassistant
 map:
   - addon_config:rw
   - ssl:ro
@@ -40,6 +41,22 @@ options:
   auto_create_on_conflict: true
   enable_semantic_search: true
   log_level: "info"
+  ha_websocket_url: "ws://supervisor/core/websocket"
+  ollama_url: "http://host.docker.internal:11434"
+  ollama_model: "llama3.2"
+  ha_mcp_url: ""
+  enable_agents: true
+  agent_filter_domains:
+    - light
+    - switch
+    - climate
+    - binary_sensor
+    - sensor
+    - cover
+    - lock
+    - alarm_control_panel
+  agent_filter_min_change_interval_seconds: 5
+  agent_context_window_tokens: 4096
 schema:
   github_repo: "str"
   github_token: "password"
@@ -53,4 +70,13 @@ schema:
   auto_create_on_conflict: "bool"
   enable_semantic_search: "bool"
   log_level: "list(debug|info|warning|error)"
+  ha_websocket_url: "str"
+  ollama_url: "str"
+  ollama_model: "str"
+  ha_mcp_url: "str?"
+  enable_agents: "bool"
+  agent_filter_domains:
+    - "str"
+  agent_filter_min_change_interval_seconds: "int(1,300)"
+  agent_context_window_tokens: "int(512,32768)"
 image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-exocortex"
