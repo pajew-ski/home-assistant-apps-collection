@@ -35,11 +35,11 @@ RUN set -eux; \
 RUN set -eux; \
     case "${BUILD_ARCH}" in \
         amd64)   QDRANT_ARCH="x86_64-unknown-linux-gnu" ;; \
-        aarch64) QDRANT_ARCH="aarch64-unknown-linux-gnu" ;; \
+        aarch64) QDRANT_ARCH="aarch64-unknown-linux-musl" ;; \
         *) echo "Unsupported BUILD_ARCH: ${BUILD_ARCH}" && exit 1 ;; \
     esac; \
     curl -fsSL \
-        "https://github.com/qdrant/qdrant/releases/download/v${QDRANT_VERSION}/qdrant-v${QDRANT_VERSION}-${QDRANT_ARCH}.tar.gz" \
+        "https://github.com/qdrant/qdrant/releases/download/v${QDRANT_VERSION}/qdrant-${QDRANT_ARCH}.tar.gz" \
         | tar xz -C /usr/local/bin/ && \
     chmod +x /usr/local/bin/qdrant
 
