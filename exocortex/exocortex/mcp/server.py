@@ -128,6 +128,53 @@ async def list_tools() -> list[Tool]:
             description="Get statistics about the knowledge base",
             inputSchema={"type": "object", "properties": {}},
         ),
+        # ── Agent tools ──────────────────────────────────────────────
+        Tool(
+            name="get_ha_state",
+            description="Query current Home Assistant entity state from Redis hot cache",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "entity_id": {"type": "string", "description": "Entity ID (e.g. 'light.living_room')"},
+                },
+                "required": ["entity_id"],
+            },
+        ),
+        Tool(
+            name="search_ha_events",
+            description="Semantic search over recent Home Assistant events",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Natural language search query"},
+                    "limit": {"type": "integer", "default": 5},
+                },
+                "required": ["query"],
+            },
+        ),
+        Tool(
+            name="get_agent_decisions",
+            description="Query recent agent decisions from the knowledge graph",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "default": 20},
+                },
+            },
+        ),
+        Tool(
+            name="trigger_agent",
+            description="Manually trigger the agent system for a specific entity",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "entity_id": {"type": "string"},
+                    "new_state": {"type": "string"},
+                    "old_state": {"type": "string", "default": ""},
+                },
+                "required": ["entity_id", "new_state"],
+            },
+        ),
     ]
 
 
@@ -232,6 +279,63 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                     f"- Orphan notes: {data.get('orphan_count', 0)}",
                 ]
                 return [TextContent(type="text", text="\n".join(lines))]
+
+            # ── Agent tools ──────────────────────────────────────────
+            elif name == "get_ha_state":
+                resp = await client.get(f"/agents/ha-state")
+                resp.raise_for_status()
+                data = resp.json()
+                entity_id = arguments["entity_id"]
+                match = next(
+                    (e for e in data.get("entities", []) if e.get("entity_id") == entity_id),
+                    None,
+                )
+                if match:
+                    return [TextContent(type="text", text=f"State of {entity_id}: {match}")]
+                return [TextContent(type="text", text=f"No cached state found for {entity_id}")]
+
+            elif name == "search_ha_events":
+                # Delegate to the agents API — we need a search endpoint.
+                # For now use the internal event filter via the status endpoint
+                # as a placeholder, or explain that semantic search requires
+                # the agent system to be active.
+                resp = await client.get("/agents/status")
+                resp.raise_for_status()
+                status = resp.json()
+                if not status.get("enabled"):
+                    return [TextContent(type="text", text="Agent system is not active.")]
+                return [TextContent(
+                    type="text",
+                    text=f"HA event search for '{arguments['query']}' — use /api/agents/ha-state for now. "
+                         f"Queue depth: {status.get('trigger_queue_depth', 0)}",
+                )]
+
+            elif name == "get_agent_decisions":
+                limit = arguments.get("limit", 20)
+                resp = await client.get("/agents/decisions", params={"limit": limit})
+                resp.raise_for_status()
+                data = resp.json()
+                decisions = data.get("decisions", [])
+                if not decisions:
+                    return [TextContent(type="text", text="No agent decisions recorded yet.")]
+                lines = [f"Recent agent decisions ({len(decisions)}):"]
+                for d in decisions:
+                    lines.append(
+                        f"- [{d.get('agent')}] {d.get('entity')}: "
+                        f"{d.get('action')} (confidence: {d.get('confidence', 0):.0%}) "
+                        f"— {d.get('reasoning', '')[:120]}"
+                    )
+                return [TextContent(type="text", text="\n".join(lines))]
+
+            elif name == "trigger_agent":
+                resp = await client.post("/agents/trigger", json={
+                    "entity_id": arguments["entity_id"],
+                    "new_state": arguments["new_state"],
+                    "old_state": arguments.get("old_state", ""),
+                })
+                resp.raise_for_status()
+                data = resp.json()
+                return [TextContent(type="text", text=f"Trigger queued. Queue depth: {data.get('queue_depth', 0)}")]
 
             else:
                 return [TextContent(type="text", text=f"Unknown tool: {name}")]

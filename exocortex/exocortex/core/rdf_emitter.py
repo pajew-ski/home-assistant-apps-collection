@@ -65,6 +65,36 @@ ex:agentAnnotation a rdf:Property ;
     rdfs:domain ex:Note ;
     rdfs:range xsd:string ;
     rdfs:label "AI Agent Annotation" .
+
+ex:HAEntity a rdfs:Class ;
+    rdfs:label "Home Assistant Entity" .
+
+ex:AgentDecision a rdfs:Class ;
+    rdfs:label "Agent Decision Record" .
+
+ex:lastState a rdf:Property ;
+    rdfs:domain ex:HAEntity ;
+    rdfs:range xsd:string .
+
+ex:lastChanged a rdf:Property ;
+    rdfs:domain ex:HAEntity ;
+    rdfs:range xsd:dateTime .
+
+ex:agent a rdf:Property ;
+    rdfs:domain ex:AgentDecision ;
+    rdfs:range xsd:string .
+
+ex:triggeredBy a rdf:Property ;
+    rdfs:domain ex:AgentDecision ;
+    rdfs:range ex:HAEntity .
+
+ex:decidedAction a rdf:Property ;
+    rdfs:domain ex:AgentDecision ;
+    rdfs:range xsd:string .
+
+ex:decisionReasoning a rdf:Property ;
+    rdfs:domain ex:AgentDecision ;
+    rdfs:range xsd:string .
 """
 
 

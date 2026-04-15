@@ -71,7 +71,8 @@ RUN /opt/exocortex/bin/pip install --no-cache-dir \
     "watchdog>=6,<7" \
     "msgpack>=1.1,<2" \
     "pyyaml>=6,<7" \
-    "mcp>=1.0,<2"
+    "mcp>=1.0,<2" \
+    "websockets>=14,<15"
 
 # ── Pre-download Embedding Model (offline operation) ─────────────────
 RUN /opt/exocortex/bin/python -c \

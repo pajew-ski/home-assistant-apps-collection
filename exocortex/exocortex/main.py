@@ -36,6 +36,7 @@ class AppState:
     git: GitManager
     pipeline: IndexPipeline
     search_engine: SearchEngine
+    agent_system: dict[str, Any] | None = None
 
 
 app_state: AppState = None  # type: ignore[assignment]
@@ -118,10 +119,77 @@ async def lifespan(app: FastAPI):
 
     logger.info("Exocortex ready. Repo: %s", config.repo_path)
 
+    # ── Agent system ─────────────────────────────────────────────────
+    agent_tasks: list[asyncio.Task] = []
+    if config.enable_agents:
+        try:
+            from exocortex.agents.event_filter import EventFilter
+            from exocortex.agents.ha_mcp_client import HaMcpClient
+            from exocortex.agents.ha_websocket import run_ha_websocket
+            from exocortex.agents.knoten_k import MetaObserver
+            from exocortex.agents.llm_client import OllamaClient
+            from exocortex.agents.orchestrator import Orchestrator
+
+            llm = OllamaClient(
+                config.ollama_url,
+                config.ollama_model,
+                config.agent_context_window_tokens,
+            )
+            mcp_client = HaMcpClient(config.ha_supervisor_token)
+            meta_observer = MetaObserver(oxigraph, redis)
+
+            trigger_queue: asyncio.Queue = asyncio.Queue()
+            event_filter = EventFilter(
+                config=config,
+                redis=redis,
+                qdrant=qdrant,
+                oxigraph=oxigraph,
+                embedding=embedding,
+                trigger_queue=trigger_queue,
+            )
+            orchestrator = Orchestrator(
+                config=config,
+                llm=llm,
+                mcp=mcp_client,
+                redis=redis,
+                qdrant=qdrant,
+                oxigraph=oxigraph,
+                embedding=embedding,
+                event_filter=event_filter,
+                meta_observer=meta_observer,
+                trigger_queue=trigger_queue,
+            )
+
+            ws_task = asyncio.create_task(
+                run_ha_websocket(config, event_filter), name="ha_websocket",
+            )
+            orch_task = asyncio.create_task(
+                orchestrator.run(), name="orchestrator",
+            )
+            agent_tasks = [ws_task, orch_task]
+
+            app_state.agent_system = {
+                "ws_task": ws_task,
+                "orch_task": orch_task,
+                "orchestrator": orchestrator,
+                "event_filter": event_filter,
+                "meta_observer": meta_observer,
+                "llm": llm,
+                "mcp": mcp_client,
+                "trigger_queue": trigger_queue,
+            }
+            logger.info("Agent system started")
+        except Exception as exc:
+            logger.error("Agent system init failed: %s", exc, exc_info=True)
+
     yield
 
     # Shutdown
     logger.info("Shutting down Exocortex...")
+    for t in agent_tasks:
+        t.cancel()
+    if agent_tasks:
+        await asyncio.gather(*agent_tasks, return_exceptions=True)
     await oxigraph.close()
     await redis.close()
 
@@ -141,6 +209,7 @@ app.add_middleware(
 )
 
 # Register API routers
+from exocortex.api import agents as agents_api
 from exocortex.api import graph, memory, notes, search, sync, system
 
 app.include_router(search.router, prefix="/api")
@@ -149,6 +218,7 @@ app.include_router(graph.router, prefix="/api")
 app.include_router(sync.router, prefix="/api")
 app.include_router(memory.router, prefix="/api")
 app.include_router(system.router, prefix="/api")
+app.include_router(agents_api.router, prefix="/api")
 
 
 @app.post("/api/internal/index-event")
