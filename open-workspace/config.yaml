@@ -1,0 +1,61 @@
+# Home-Assistant-Add-on „Open Workspace" (SPEC §5.2, M12).
+#
+# Dieses Verzeichnis ist ein Add-on-Repository-Eintrag: Home Assistant
+# braucht davon nur diese Datei (plus DOCS.md/README). Es gibt bewusst
+# KEIN Dockerfile hier — das Add-on zieht exakt dasselbe Image, das auch
+# `deploy/server/docker-compose.yml` startet (Review-Blocker laut SPEC:
+# ein zweites Dockerfile wäre ein zweites Produkt).
+#
+# Weil das Image vorgebaut kommt, ist sein Einstieg (`scripts/start.mjs`)
+# auch der Add-on-Einstieg: er erfragt den Ingress-Pfad beim Supervisor,
+# setzt ihn in den Build ein, verknüpft `/data` und gibt die root-Rechte ab.
+name: Open Workspace
+version: "0.1.0.202609231003"
+slug: open_workspace
+description: AI-Workspace mit RDF-Graph-Kern, SPARQL, MCP-Server und Föderation
+url: https://github.com/pajew-ski/open-workspace
+image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-open-workspace"
+arch:
+  - aarch64
+  - amd64
+init: false
+
+# Ingress: Home Assistant proxied die App unter /api/hassio_ingress/<token>.
+# Der Port ist nur intern erreichbar — kein direkter Port nach außen.
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:graph-outline
+panel_title: Workspace
+panel_admin: true
+
+# Der Workspace darf Vaults und Git-Verzeichnisse unter /share lesen und
+# schreiben (Obsidian-Connector, git-backup). /data ist die persistente
+# Ablage des Add-ons und wird beim Start mit dem Saat-Bestand befüllt.
+map:
+  - share:rw
+
+# Zugriff auf die Core-API von Home Assistant. Der Supervisor legt dafür
+# SUPERVISOR_TOKEN in die Umgebung; erreichbar wird damit
+# http://supervisor/core/api.
+#
+# Das ist eine bewusste Rechteerweiterung, kein Nebeneffekt: Ohne sie sieht
+# das Add-on von Home Assistant genau nichts, mit ihr LESEND alle Entitäten,
+# ihren Zustand, ihre Historie und die Registry (Bereiche, Etagen, Geräte).
+# Gebraucht wird das vom `home-assistant`-Connector (Struktur) und von der
+# Beobachtungs-Erfassung (Zeitreihen) — beide lesen ausschließlich.
+# Geschaltet wird nichts: `homeassistant_api` erlaubt technisch auch
+# Service-Calls, der Workspace macht davon keinen Gebrauch, und es gibt
+# keine Oberfläche dafür (Invariante 10). Begründung und Umfang:
+# DOCS.md „Zugriff auf Home Assistant".
+homeassistant_api: true
+
+options:
+  log_level: info
+  instance_base: ""
+  vault_roots: ""
+  git_roots: ""
+schema:
+  log_level: list(trace|debug|info|warning|error)?
+  instance_base: str?
+  vault_roots: str?
+  git_roots: str?
