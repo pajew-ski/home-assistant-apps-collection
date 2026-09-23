@@ -27,6 +27,17 @@
       "static_app": true
     },
     {
+      "slug": "open-workspace",
+      "name": "Open Workspace",
+      "source": "https://github.com/pajew-ski/open-workspace",
+      "branch": "main",
+      "addon_path": "deploy/ha-addon",
+      "sync_files": ["deploy/ha-addon/config.yaml", "deploy/ha-addon/DOCS.md", "public/icons/icon-192.png"],
+      "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-open-workspace",
+      "native_arch_runners": true,
+      "ci_gated": true
+    },
+    {
       "slug": "exocortex",
       "name": "Exocortex",
       "source": "https://github.com/pajew-ski/home-assistant-apps-collection",
