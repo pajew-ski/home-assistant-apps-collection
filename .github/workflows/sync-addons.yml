@@ -422,3 +422,209 @@ jobs:
           git diff --cached --quiet || \
             git commit -m "chore(exocortex): rebuild v${{ steps.exocortex.outputs.new_version }}"
           git push
+
+  # ---------------------------------------------------------------------------
+  # open-workspace – https://github.com/pajew-ski/open-workspace
+  #
+  # Eigene Jobs statt Schritte im sync-Job:
+  # - Der Build (bun install + next build) läuft nativ je Architektur;
+  #   aarch64 unter QEMU wäre langsam und bun unter Emulation unzuverlässig.
+  # - Upstream führt keine Versionsnummer pro Änderung (config.yaml bleibt
+  #   auf 0.1.0). Die Add-on-Version ist deshalb
+  #   {upstream_version}.{Commit-Zeitpunkt YYYYMMDDHHMM} des gebauten Commits.
+  # - Gebaut wird nur ein Commit, dessen Upstream-CI grün ist, und nur, wenn
+  #   sich seit dem zuletzt gebauten Commit (open-workspace/.upstream-sha)
+  #   etwas geändert hat, das im Image oder im Add-on-Manifest landet.
+  # - Die config.yaml wird erst nach erfolgreichem Push aller Images
+  #   committet: Home Assistant sieht nie eine Version ohne Image.
+  # ---------------------------------------------------------------------------
+  open-workspace-check:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'open-workspace' }}
+    outputs:
+      needs_update: ${{ steps.check.outputs.needs_update }}
+      sha: ${{ steps.check.outputs.sha }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Checkout collection
+        uses: actions/checkout@v4
+
+      - name: Check open-workspace for updates
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          API=https://api.github.com/repos/pajew-ski/open-workspace
+          api() { curl -sf -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$API/$1"; }
+
+          HEAD_JSON=$(api commits/main)
+          SHA=$(jq -r .sha <<<"$HEAD_JSON")
+          COMMIT_DATE=$(jq -r .commit.committer.date <<<"$HEAD_JSON")
+          LAST_SHA=$(cat open-workspace/.upstream-sha 2>/dev/null || true)
+
+          UPSTREAM_VERSION=$(curl -sf \
+            "https://raw.githubusercontent.com/pajew-ski/open-workspace/$SHA/deploy/ha-addon/config.yaml" \
+            | grep '^version:' | awk '{print $2}' | tr -d '"')
+          STAMP=$(date -u -d "$COMMIT_DATE" +%Y%m%d%H%M)
+          # Erzwungener Neubau desselben Commits braucht eine neue Version,
+          # sonst bietet Home Assistant kein Update an.
+          if [ "$FORCE" = "true" ] && [ "$SHA" = "$LAST_SHA" ]; then
+            STAMP=$(date -u +%Y%m%d%H%M)
+          fi
+          VERSION="${UPSTREAM_VERSION}.${STAMP}"
+
+          echo "sha=$SHA"         >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          skip() { echo "needs_update=false" >> "$GITHUB_OUTPUT"; echo "$1"; exit 0; }
+
+          if [ "$FORCE" != "true" ]; then
+            [ "$SHA" = "$LAST_SHA" ] && skip "Already up-to-date at ${SHA:0:7}"
+
+            # Nur Änderungen, die ins Image oder ins Manifest gehen, lösen
+            # einen Neubau aus. Unbekannter Vorgänger (erster Lauf, Upstream-
+            # History umgeschrieben) oder >= 300 Dateien: neu bauen.
+            RELEVANT='^(src|scripts|public|seed|ontology|deploy/ha-addon)/|^(Dockerfile|\.dockerignore|package\.json|bun\.lock|next\.config\.ts|tsconfig\.json)$'
+            if [ -n "$LAST_SHA" ] && COMPARE=$(api "compare/${LAST_SHA}...${SHA}"); then
+              FILES=$(jq -r '.files[].filename' <<<"$COMPARE")
+              COUNT=$(jq '.files | length' <<<"$COMPARE")
+              if [ "$COUNT" -lt 300 ] && ! grep -qE "$RELEVANT" <<<"$FILES"; then
+                skip "No image-relevant changes in ${LAST_SHA:0:7}..${SHA:0:7}"
+              fi
+            fi
+          fi
+
+          # Upstream-CI muss für genau diesen Commit abgeschlossen und grün
+          # sein. Läuft sie noch, holt der nächste Lauf das Update nach.
+          RUNS=$(api "commits/$SHA/check-runs?per_page=100")
+          TOTAL=$(jq '.total_count' <<<"$RUNS")
+          PENDING=$(jq '[.check_runs[] | select(.status != "completed")] | length' <<<"$RUNS")
+          FAILED=$(jq -r '[.check_runs[] | select(.status == "completed" and (.conclusion | IN("success", "skipped", "neutral") | not)) | .name] | join(", ")' <<<"$RUNS")
+          [ "$TOTAL" -eq 0 ] && skip "Upstream CI has not reported for ${SHA:0:7} yet"
+          [ "$PENDING" -gt 0 ] && skip "Upstream CI still running for ${SHA:0:7}"
+          if [ -n "$FAILED" ]; then
+            echo "::warning::open-workspace ${SHA:0:7} not mirrored, upstream CI failed: $FAILED"
+            skip "Upstream CI failed for ${SHA:0:7}"
+          fi
+
+          echo "needs_update=true" >> "$GITHUB_OUTPUT"
+          echo "Update needed: ${LAST_SHA:0:7} → ${SHA:0:7} (v$VERSION)"
+
+  open-workspace-build:
+    needs: open-workspace-check
+    if: needs.open-workspace-check.outputs.needs_update == 'true'
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout open-workspace
+        uses: actions/checkout@v4
+        with:
+          repository: pajew-ski/open-workspace
+          ref: ${{ needs.open-workspace-check.outputs.sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Upstream-Dockerfile ohne BUILD_FROM: es bringt seine eigenen
+      # Basis-Images mit (oven/bun, node:22-alpine) — daher nur amd64/aarch64.
+      - name: Build and push open-workspace ${{ matrix.arch }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: true
+          provenance: false
+          sbom: false
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection/${{ matrix.arch }}-open-workspace:${{ needs.open-workspace-check.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection/${{ matrix.arch }}-open-workspace:latest
+          cache-from: type=gha,scope=open-workspace-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=open-workspace-${{ matrix.arch }}
+
+  open-workspace-publish:
+    # Nach dem sync-Job, damit beide nicht gleichzeitig auf den Branch pushen;
+    # dessen Ergebnis spielt keine Rolle.
+    needs: [sync, open-workspace-check, open-workspace-build]
+    if: ${{ !cancelled() && needs.open-workspace-check.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.open-workspace-build.result) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout collection
+        uses: actions/checkout@v4
+
+      - name: Make open-workspace packages public
+        env:
+          GH_TOKEN: ${{ secrets.PAT_PACKAGES || secrets.GITHUB_TOKEN }}
+        run: |
+          for ARCH in amd64 aarch64; do
+            PACKAGE="home-assistant-apps-collection%2F${ARCH}-open-workspace"
+            gh api --method PATCH \
+              -H "Accept: application/vnd.github+json" \
+              "/user/packages/container/${PACKAGE}" \
+              -f visibility=public \
+              2>/dev/null \
+              && echo "${ARCH}-open-workspace → public" \
+              || echo "${ARCH}-open-workspace: visibility update skipped (may already be public or token lacks scope)"
+          done
+
+      - name: Sync open-workspace config files
+        if: needs.open-workspace-check.outputs.needs_update == 'true'
+        env:
+          SHA: ${{ needs.open-workspace-check.outputs.sha }}
+          VERSION: ${{ needs.open-workspace-check.outputs.version }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection/{arch}-open-workspace
+        run: |
+          set -euo pipefail
+          BASE_URL="https://raw.githubusercontent.com/pajew-ski/open-workspace/$SHA"
+          mkdir -p open-workspace
+
+          # Manifest liegt upstream unter deploy/ha-addon/. Dessen image-Feld
+          # zeigt auf ein Image, das upstream nicht baut: ersetzen.
+          curl -sf "$BASE_URL/deploy/ha-addon/config.yaml" -o open-workspace/config.yaml
+          sed -i -E \
+            -e "s|^image:.*|image: \"$IMAGE\"|" \
+            -e "s|^version:.*|version: \"$VERSION\"|" \
+            -e '/^\s*- (armv7|armhf|i386)\s*$/d' \
+            open-workspace/config.yaml
+          grep -q '^image:' open-workspace/config.yaml \
+            || echo "image: \"$IMAGE\"" >> open-workspace/config.yaml
+          grep -q "^version: \"$VERSION\"$" open-workspace/config.yaml
+
+          # Relative Links in DOCS.md zeigen upstream ins Repo.
+          curl -sf "$BASE_URL/deploy/ha-addon/DOCS.md" \
+            | sed -E 's#\]\(\.\./\.\./#](https://github.com/pajew-ski/open-workspace/blob/main/#g' \
+            > open-workspace/DOCS.md
+
+          curl -sf "$BASE_URL/public/icons/icon-192.png" -o open-workspace/icon.png || true
+
+          echo "$SHA" > open-workspace/.upstream-sha
+
+      - name: Commit and push open-workspace changes
+        if: needs.open-workspace-check.outputs.needs_update == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add open-workspace/
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(open-workspace): sync to v${{ needs.open-workspace-check.outputs.version }}"
+          for DELAY in 2 4 8 16; do
+            git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME" && exit 0
+            sleep "$DELAY"
+          done
+          exit 1

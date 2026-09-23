@@ -19,6 +19,7 @@ A single-link Home Assistant add-on repository that aggregates multiple add-ons.
 | [Prompts](./prompts/) | 1.0.3 | 100+ KI-Prompting-Strategien – durchsuchbar, filterbar, sofort kopierbar. | [pajew-ski/prompts](https://github.com/pajew-ski/prompts) |
 | [Open Entrainer](./open-entrainer/) | 2026.3.6 | Binaural beats generator for brainwave entrainment – Delta, Theta, Alpha, Beta, Gamma. | [pajew-ski/open-entrainer](https://github.com/pajew-ski/open-entrainer) |
 | [Open Desensitizer](./open-desensitizer/) | 2026.3.6 | Bilateral stimulation tool for stress reduction and relaxation via guided eye movement. | [pajew-ski/open-desensitizer](https://github.com/pajew-ski/open-desensitizer) |
+| [Open Workspace](./open-workspace/) | rolling | AI-Workspace mit RDF-Graph-Kern, SPARQL, MCP-Server und Föderation (amd64, aarch64). | [pajew-ski/open-workspace](https://github.com/pajew-ski/open-workspace) |
 | [Exocortex](./exocortex/) | 1.0.0.1 | Knowledge operating system with hybrid search, SPARQL graph, AI agent memory, MCP server, and multi-agent orchestration. | [pajew-ski/home-assistant-apps-collection](https://github.com/pajew-ski/home-assistant-apps-collection) |
 
 ## How It Works
@@ -33,6 +34,11 @@ The [sync workflow](./.github/workflows/sync-addons.yml) runs daily and:
 - Rebuilds multi-arch Docker images (amd64, aarch64, armv7, armhf, i386)
 - Pushes images to `ghcr.io/pajew-ski/home-assistant-apps-collection/`
 - Updates the mirrored `config.yaml` and commits the change
+
+Open Workspace has no per-change version upstream. It is mirrored from every
+green `main` commit that touches the image or the add-on manifest, versioned
+as `{upstream version}.{commit time YYYYMMDDHHMM}`, and built natively for
+amd64 and aarch64.
 
 ## Adding a New Add-on
 

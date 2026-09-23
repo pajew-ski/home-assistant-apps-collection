@@ -41,6 +41,10 @@ home-assistant-apps-collection/
 │   └── config.yaml
 ├── open-desensitizer/         # Upstream mirror (static app)
 │   └── config.yaml
+├── open-workspace/            # Upstream mirror (created by the first sync run)
+│   ├── config.yaml            #   from deploy/ha-addon/ upstream
+│   ├── DOCS.md
+│   └── .upstream-sha          #   last mirrored upstream commit
 └── exocortex/                 # Custom add-on (self-contained in this repo)
     ├── Dockerfile
     ├── build.yaml
@@ -69,6 +73,7 @@ home-assistant-apps-collection/
 | `prompts` | upstream mirror | https://github.com/pajew-ski/prompts |
 | `open-entrainer` | upstream mirror (static) | https://github.com/pajew-ski/open-entrainer |
 | `open-desensitizer` | upstream mirror (static) | https://github.com/pajew-ski/open-desensitizer |
+| `open-workspace` | upstream mirror (commit-versioned, CI-gated) | https://github.com/pajew-ski/open-workspace |
 | `exocortex` | custom dockerfile | self-contained in this repo |
 
 ---
@@ -240,6 +245,29 @@ If an add-on's Dockerfile uses `node:22-alpine` (or any other image that lacks
 
 Failing to do so causes the Docker buildx step to error with:
 > `no match for platform in manifest: not found`
+
+### Upstreams without a version bump per change (open-workspace)
+
+`open-workspace` keeps `version: "0.1.0"` in `deploy/ha-addon/config.yaml`
+while `main` moves on, so a version comparison never detects updates. It has
+its own jobs in `sync-addons.yml` (`open-workspace-check`, `-build`,
+`-publish`) instead of steps in the `sync` job:
+
+- **Trigger:** upstream `main` HEAD differs from `open-workspace/.upstream-sha`
+  and the diff touches something that ends up in the image or the manifest
+  (`src/`, `scripts/`, `public/`, `seed/`, `ontology/`, `deploy/ha-addon/`,
+  `Dockerfile`, `package.json`, `bun.lock`, …). Docs-only commits are skipped.
+- **Gate:** all check runs of that commit are completed and green; otherwise
+  the next run picks it up.
+- **Version:** `{upstream version}.{commit time YYYYMMDDHHMM}`; *Force rebuild*
+  of an unchanged commit uses the current time so HA still offers the update.
+- **Build:** natively per arch (`ubuntu-latest`, `ubuntu-24.04-arm`) with the
+  upstream Dockerfile unchanged (no `BUILD_FROM`; it brings `oven/bun` and
+  `node:22-alpine`, hence amd64/aarch64 only). bun under QEMU is unreliable.
+- **Publish:** `config.yaml` is committed only after both images are pushed,
+  and only after the `sync` job has finished, to avoid concurrent pushes.
+  The upstream `image:` field (`ghcr.io/pajew-ski/open-workspace`, never
+  built) is replaced, not appended.
 
 ---
 
