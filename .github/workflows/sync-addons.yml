@@ -42,15 +42,20 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # -----------------------------------------------------------------------
-      # prompts – https://github.com/pajew-ski/prompts
+      # prompts – https://github.com/pajew-ski/prompts (static single-file app)
       # -----------------------------------------------------------------------
       - name: Check prompts for updates
         id: prompts
         if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'prompts' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          UPSTREAM_VERSION=$(curl -sf \
-            https://raw.githubusercontent.com/pajew-ski/prompts/main/config.yaml \
-            | grep '^version:' | awk '{print $2}' | tr -d '"')
+          API_RESPONSE=$(curl -sf \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/pajew-ski/prompts/commits?path=index.html&per_page=1")
+
+          UPSTREAM_VERSION=$(echo "$API_RESPONSE" | python3 -c \
+            'import sys,json; d=json.load(sys.stdin)[0]["commit"]["committer"]["date"][:10].split("-"); print(d[0]+"."+str(int(d[1]))+"."+str(int(d[2])))')
 
           CURRENT_VERSION=$(grep '^version:' prompts/config.yaml \
             | awk '{print $2}' | tr -d '"')
@@ -67,46 +72,24 @@ jobs:
             echo "Already up-to-date at $CURRENT_VERSION"
           fi
 
-      - name: Sync prompts config files
-        if: steps.prompts.outputs.needs_update == 'true'
-        run: |
-          BASE_URL="https://raw.githubusercontent.com/pajew-ski/prompts/main"
-
-          # Always sync build.yaml (strip unsupported archs)
-          curl -sf "$BASE_URL/build.yaml" -o prompts/build.yaml
-          sed -i '/^\s*armhf:/d; /^\s*i386:/d' prompts/build.yaml
-
-          # Sync upstream config.yaml and inject image reference
-          UPSTREAM_CONFIG=$(curl -sf "$BASE_URL/config.yaml")
-          echo "$UPSTREAM_CONFIG" > prompts/config.yaml
-
-          # Strip unsupported architectures from arch list
-          sed -i '/^\s*- armhf$/d; /^\s*- i386$/d' prompts/config.yaml
-
-          # Add image field if not already present
-          if ! grep -q '^image:' prompts/config.yaml; then
-            echo 'image: "ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection/{arch}-prompts"' \
-              >> prompts/config.yaml
-          fi
-
-          # Sync optional display assets (ignore 404s)
-          curl -sf "$BASE_URL/icon.png" -o prompts/icon.png  2>/dev/null || true
-          curl -sf "$BASE_URL/logo.png" -o prompts/logo.png  2>/dev/null || true
-
       - name: Build and push prompts Docker images
         if: steps.prompts.outputs.needs_update == 'true'
         env:
           VERSION: ${{ steps.prompts.outputs.upstream }}
           REGISTRY: ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection
         run: |
-          git clone --depth 1 https://github.com/pajew-ski/prompts /tmp/prompts-source
+          export BUILD_DIR=$(mktemp -d)
+
+          curl -sf \
+            "https://raw.githubusercontent.com/pajew-ski/prompts/main/index.html" \
+            -o "$BUILD_DIR/index.html"
+
+          python3 -c 'import os; open(os.environ["BUILD_DIR"]+"/Dockerfile","w").write("ARG BUILD_FROM\nFROM ${BUILD_FROM}\nRUN apk add --no-cache nginx\nRUN echo \"server { listen 8099; root /www; index index.html; }\" > /etc/nginx/http.d/default.conf\nCOPY index.html /www/index.html\nEXPOSE 8099\nENTRYPOINT []\nCMD [\"nginx\", \"-g\", \"daemon off;\"]\n")'
 
           declare -A PLATFORM_MAP=(
             [amd64]=linux/amd64
             [aarch64]=linux/arm64
             [armv7]=linux/arm/v7
-            [armhf]=linux/arm/v6
-            [i386]=linux/386
           )
 
           for ARCH in amd64 aarch64 armv7; do
@@ -121,8 +104,11 @@ jobs:
               --tag "${IMAGE_TAG}:${VERSION}" \
               --tag "${IMAGE_TAG}:latest" \
               --push \
-              /tmp/prompts-source
+              "$BUILD_DIR"
           done
+
+          # Update version in config.yaml
+          sed -i "s/^version:.*/version: \"$VERSION\"/" prompts/config.yaml
 
       - name: Make prompts packages public
         if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'prompts' }}
@@ -140,7 +126,7 @@ jobs:
               || echo "${ARCH}-prompts: visibility update skipped (may already be public or token lacks scope)"
           done
 
-      - name: Commit and push changes
+      - name: Commit and push prompts changes
         if: steps.prompts.outputs.needs_update == 'true'
         run: |
           git config user.name  "github-actions[bot]"

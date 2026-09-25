@@ -34,13 +34,18 @@ home-assistant-apps-collection/
 ├── .github/
 │   └── workflows/
 │       └── sync-addons.yml    # Daily sync + Docker build workflow
-├── prompts/                   # Upstream mirror
+├── prompts/                   # Upstream mirror (static single-file app)
 │   ├── config.yaml
-│   └── build.yaml
-├── open-entrainer/            # Upstream mirror (static app)
-│   └── config.yaml
-├── open-desensitizer/         # Upstream mirror (static app)
-│   └── config.yaml
+│   ├── build.yaml
+│   └── icon.png
+├── open-entrainer/            # Upstream mirror (static single-file app)
+│   ├── config.yaml
+│   ├── build.yaml
+│   └── icon.png
+├── open-desensitizer/         # Upstream mirror (static single-file app)
+│   ├── config.yaml
+│   ├── build.yaml
+│   └── icon.png
 ├── open-workspace/            # Upstream mirror (created by the first sync run)
 │   ├── config.yaml            #   from deploy/ha-addon/ upstream
 │   ├── DOCS.md
@@ -70,13 +75,39 @@ home-assistant-apps-collection/
 
 | Slug | Type | Source |
 |------|------|--------|
-| `prompts` | upstream mirror | https://github.com/pajew-ski/prompts |
-| `open-entrainer` | upstream mirror (static) | https://github.com/pajew-ski/open-entrainer |
-| `open-desensitizer` | upstream mirror (static) | https://github.com/pajew-ski/open-desensitizer |
+| `prompts` | upstream mirror (static single-file app) | https://github.com/pajew-ski/prompts |
+| `open-entrainer` | upstream mirror (static single-file app) | https://github.com/pajew-ski/open-entrainer |
+| `open-desensitizer` | upstream mirror (static single-file app) | https://github.com/pajew-ski/open-desensitizer |
 | `open-workspace` | upstream mirror (commit-versioned, CI-gated) | https://github.com/pajew-ski/open-workspace |
 | `exocortex` | custom dockerfile | self-contained in this repo |
 
 ---
+
+## Add-on kinds
+
+Three patterns live side by side in `sync-addons.yml`:
+
+1. **Static single-file app** (`prompts`, `open-entrainer`,
+   `open-desensitizer`): the upstream repo is one `index.html` with no build
+   step and no external resource (the Lindy pattern of the temet-nosce
+   family). Upstream has **no** add-on files; `config.yaml` and `build.yaml`
+   live only here and are never overwritten by the sync. The workflow
+   fetches `index.html`, writes a four-line Dockerfile around nginx on the
+   add-on's ingress port, builds amd64/aarch64/armv7 and sets `version` to
+   the date of the last upstream commit that touched `index.html`
+   (`YYYY.M.D`). The build always runs from `main` upstream.
+2. **Versioned upstream add-on** (none at the moment; `prompts` used to be
+   one): upstream ships `config.yaml`, `build.yaml` and a Dockerfile with
+   `ARG BUILD_FROM`; the sync compares `version`, mirrors the config files
+   and builds the upstream Dockerfile.
+3. **Custom** (`exocortex`) and **commit-versioned, CI-gated**
+   (`open-workspace`): see their own sections below.
+
+The four apps of the family (`prompts`, `open-entrainer`,
+`open-desensitizer`, `open-workspace`) share one design (achromatic oklch
+tokens, Fibonacci spacing, φ type scale, automatic dark mode); their
+`icon.png` here follows it (dark rounded square, light glyph). Keep new
+icons in that style.
 
 ## Adding a New Add-on
 
@@ -136,11 +167,14 @@ curl -sf https://raw.githubusercontent.com/<owner>/<repo>/main/logo.png \
 
 ### 4. Add a sync step to the workflow
 
-Open `.github/workflows/sync-addons.yml` and duplicate the block for `prompts`
-(the section between the two `# ---` dividers), replacing every occurrence of
-`prompts` with the new `<slug>` and updating the upstream GitHub URL.
+Open `.github/workflows/sync-addons.yml` and duplicate the block that matches
+the add-on kind (the section between two `# ---` dividers): `open-entrainer`
+for a static single-file app (then skip steps 2 and 3 above, write
+`config.yaml`/`build.yaml` by hand and set `"static_app": true` with
+`"sync_files": ["index.html"]` in the registry), `exocortex` for a custom
+Dockerfile. Replace every occurrence of the slug and the upstream URL.
 
-The pattern is:
+The pattern for a versioned upstream add-on is:
 1. A step named `Check <slug> for updates` that fetches the upstream version and
    compares it to the local one, outputting `needs_update`, `upstream`, and
    `current`.
@@ -156,8 +190,11 @@ The pattern is:
 Add a row to the **Included Add-ons** table:
 
 ```markdown
-| [Name](./<slug>/) | x.y.z | Short description | [owner/repo](https://github.com/owner/repo) |
+| [Name](./<slug>/) | Short description | [owner/repo](https://github.com/owner/repo) |
 ```
+
+The table carries no version column: the version lives in `config.yaml` and
+the sync bumps it there.
 
 ### 6. Commit
 
@@ -181,14 +218,15 @@ If you need to force-update an add-on without waiting for the daily schedule:
 Or locally:
 
 ```bash
-# Update config.yaml from upstream, re-inject image field
-curl -sf https://raw.githubusercontent.com/pajew-ski/prompts/main/config.yaml \
-  -o prompts/config.yaml
-echo 'image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-prompts"' \
-  >> prompts/config.yaml
+# Static single-file apps keep their config here; only the image is rebuilt.
+# For a versioned upstream add-on, fetch config.yaml and re-inject the image:
+curl -sf https://raw.githubusercontent.com/<owner>/<repo>/main/config.yaml \
+  -o <slug>/config.yaml
+echo 'image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-<slug>"' \
+  >> <slug>/config.yaml
 
-git add prompts/
-git commit -m "chore(prompts): manual sync"
+git add <slug>/
+git commit -m "chore(<slug>): manual sync"
 git push
 ```
 
