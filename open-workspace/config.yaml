@@ -10,7 +10,7 @@
 # auch der Add-on-Einstieg: er erfragt den Ingress-Pfad beim Supervisor,
 # setzt ihn in den Build ein, verknüpft `/data` und gibt die root-Rechte ab.
 name: Open Workspace
-version: "0.1.0.202610021337"
+version: "0.1.0.202610021504"
 slug: open_workspace
 description: AI-Workspace mit RDF-Graph-Kern, SPARQL, MCP-Server und Föderation
 url: https://github.com/pajew-ski/open-workspace
