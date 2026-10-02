@@ -14,31 +14,24 @@ A single-link Home Assistant add-on repository that aggregates multiple add-ons.
 
 ## Included Add-ons
 
-| Add-on | Version | Description | Source |
-|--------|---------|-------------|--------|
-| [Prompts](./prompts/) | 1.0.3 | 100+ KI-Prompting-Strategien – durchsuchbar, filterbar, sofort kopierbar. | [pajew-ski/prompts](https://github.com/pajew-ski/prompts) |
-| [Open Entrainer](./open-entrainer/) | 2026.3.6 | Binaural beats generator for brainwave entrainment – Delta, Theta, Alpha, Beta, Gamma. | [pajew-ski/open-entrainer](https://github.com/pajew-ski/open-entrainer) |
-| [Open Desensitizer](./open-desensitizer/) | 2026.3.6 | Bilateral stimulation tool for stress reduction and relaxation via guided eye movement. | [pajew-ski/open-desensitizer](https://github.com/pajew-ski/open-desensitizer) |
-| [Open Workspace](./open-workspace/) | rolling | AI-Workspace mit RDF-Graph-Kern, SPARQL, MCP-Server und Föderation (amd64, aarch64). | [pajew-ski/open-workspace](https://github.com/pajew-ski/open-workspace) |
-| [Exocortex](./exocortex/) | 1.0.0.1 | Knowledge operating system with hybrid search, SPARQL graph, AI agent memory, MCP server, and multi-agent orchestration. | [pajew-ski/home-assistant-apps-collection](https://github.com/pajew-ski/home-assistant-apps-collection) |
+| Add-on | Description | Source |
+|--------|-------------|--------|
+| [Prompts](./prompts/) | A hundred prompting strategies for language models in English and German, plus skills and agent instructions. | [pajew-ski/prompts](https://github.com/pajew-ski/prompts) |
+| [Open Entrainer](./open-entrainer/) | A binaural beat generator with a plan you set and pink noise underneath. | [pajew-ski/open-entrainer](https://github.com/pajew-ski/open-entrainer) |
+| [Open Desensitizer](./open-desensitizer/) | Bilateral stimulation with a moving dot, an optional tone and a grounding exercise. | [pajew-ski/open-desensitizer](https://github.com/pajew-ski/open-desensitizer) |
+| [Open Helix](./open-helix/) | A Shepard-Risset glissando, every parameter adjustable, with a live spectrogram. | [pajew-ski/open-helix](https://github.com/pajew-ski/open-helix) |
+| [Open Workspace](./open-workspace/) | AI workspace with an RDF graph core, SPARQL, MCP server and federation (amd64, aarch64). | [pajew-ski/open-workspace](https://github.com/pajew-ski/open-workspace) |
+| [Exocortex](./exocortex/) | Knowledge operating system with hybrid search, SPARQL graph, AI agent memory, MCP server and multi-agent orchestration. | [pajew-ski/home-assistant-apps-collection](https://github.com/pajew-ski/home-assistant-apps-collection) |
+
+The store shows the current version of each add-on.
 
 ## How It Works
 
-Each add-on in this collection is mirrored from its upstream source repository.
-The `config.yaml` and `build.yaml` files are synced automatically. Pre-built
-Docker images are published to the GitHub Container Registry (ghcr.io) and
-referenced from each add-on's `config.yaml` via the `image` field.
+The [sync workflow](./.github/workflows/sync-addons.yml) builds every add-on's Docker images, pushes them to `ghcr.io/pajew-ski/home-assistant-apps-collection/`, and commits the new version into the add-on's `config.yaml` only after all of its images are pushed. It runs right after a merge in a source repository (that repository's notify workflow sends a `repository_dispatch`), every hour as a fallback, and by hand.
 
-The [sync workflow](./.github/workflows/sync-addons.yml) runs daily and:
-- Detects version bumps in upstream repositories
-- Rebuilds multi-arch Docker images (amd64, aarch64, armv7, armhf, i386)
-- Pushes images to `ghcr.io/pajew-ski/home-assistant-apps-collection/`
-- Updates the mirrored `config.yaml` and commits the change
-
-Open Workspace has no per-change version upstream. It is mirrored from every
-green `main` commit that touches the image or the add-on manifest, versioned
-as `{upstream version}.{commit time YYYYMMDDHHMM}`, and built natively for
-amd64 and aarch64.
+- **Static apps** (Prompts, Open Entrainer, Open Desensitizer, Open Helix): the upstream is one `index.html`, served by nginx from a shared [Dockerfile](./static-app/Dockerfile) for amd64, aarch64 and armv7. Every commit that changes `index.html` on `main` becomes a version `YYYY.M.D.HHMM` from its commit time. The last built commit is kept in `<slug>/.upstream-sha`.
+- **Open Workspace** has no per-change version upstream. It is mirrored from every green `main` commit that touches the image or the add-on manifest, versioned as `{upstream version}.{commit time YYYYMMDDHHMM}`, and built natively for amd64 and aarch64.
+- **Exocortex** lives in this repository; a forced run rebuilds it with the next packaging version.
 
 ## Adding a New Add-on
 
