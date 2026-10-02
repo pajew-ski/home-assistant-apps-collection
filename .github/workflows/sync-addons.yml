@@ -1,9 +1,26 @@
 name: Sync Add-ons
 
+# Keeps every add-on in this collection at the state of its source.
+#
+# Triggers:
+# - repository_dispatch "upstream-changed": a source repository sends it right
+#   after a merge to main (its notify workflow), with the slug as payload.
+# - schedule: hourly fallback. Every check compares against what was built
+#   last, so a run without changes only reads a few API endpoints.
+# - push to main under exocortex/: a version bump there is built at once.
+# - workflow_dispatch: by hand, for one add-on or all, optionally forced.
+#
+# Pushes to main come from several jobs; each one rebases and retries, and the
+# concurrency group keeps two runs from interleaving.
+
 on:
+  repository_dispatch:
+    types: [upstream-changed]
+  push:
+    branches: [main]
+    paths: ['exocortex/**']
   schedule:
-    # Run daily at 06:00 UTC
-    - cron: '0 6 * * *'
+    - cron: '23 * * * *'
   workflow_dispatch:
     inputs:
       addon:
@@ -11,7 +28,7 @@ on:
         required: false
         default: ''
       force:
-        description: 'Force rebuild even if version has not changed'
+        description: 'Force rebuild even if nothing has changed'
         type: boolean
         default: false
 
@@ -19,14 +36,57 @@ permissions:
   contents: write
   packages: write
 
+concurrency:
+  group: sync-addons
+  cancel-in-progress: false
+
+env:
+  # Which add-on to look at (empty: all) and whether to rebuild regardless,
+  # from either a manual run or a dispatch payload.
+  ADDON: ${{ inputs.addon || github.event.client_payload.slug || '' }}
+  FORCE: ${{ inputs.force || github.event.client_payload.force || false }}
+  REGISTRY: ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection
+
 jobs:
-  sync:
+  # ---------------------------------------------------------------------------
+  # Static apps – prompts, open-entrainer, open-desensitizer, open-helix
+  #
+  # Each upstream is one index.html. The image is that file behind nginx
+  # (static-app/Dockerfile), built for every arch in the add-on's config.yaml.
+  # - Check: the newest upstream commit that touched index.html, against
+  #   <slug>/.upstream-sha. Version: commit time as YYYY.M.D.HHMM, so every
+  #   merge gets its own version and Home Assistant offers it.
+  # - Build: one matrix leg per app; a failing app does not hold back others.
+  # - Publish: config.yaml and .upstream-sha are committed only for apps whose
+  #   images were all pushed, so Home Assistant never sees a version without
+  #   an image.
+  # ---------------------------------------------------------------------------
+  static-check:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.check.outputs.matrix }}
+      any: ${{ steps.check.outputs.any }}
     steps:
       - name: Checkout collection
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/checkout@v5
+
+      - name: Check static apps for updates
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/static_apps.py check
+
+  static-build:
+    needs: static-check
+    if: needs.static-check.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.static-check.outputs.matrix) }}
+    name: static-build (${{ matrix.slug }})
+    steps:
+      - name: Checkout collection
+        uses: actions/checkout@v5
 
       - name: Set up QEMU (multi-arch builds)
         uses: docker/setup-qemu-action@v3
@@ -41,377 +101,173 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # -----------------------------------------------------------------------
-      # prompts – https://github.com/pajew-ski/prompts
-      # -----------------------------------------------------------------------
-      - name: Check prompts for updates
-        id: prompts
-        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'prompts' }}
-        run: |
-          UPSTREAM_VERSION=$(curl -sf \
-            https://raw.githubusercontent.com/pajew-ski/prompts/main/config.yaml \
-            | grep '^version:' | awk '{print $2}' | tr -d '"')
-
-          CURRENT_VERSION=$(grep '^version:' prompts/config.yaml \
-            | awk '{print $2}' | tr -d '"')
-
-          echo "upstream=$UPSTREAM_VERSION" >> "$GITHUB_OUTPUT"
-          echo "current=$CURRENT_VERSION"   >> "$GITHUB_OUTPUT"
-
-          if [ "$UPSTREAM_VERSION" != "$CURRENT_VERSION" ] \
-             || [ "${{ inputs.force }}" = "true" ]; then
-            echo "needs_update=true" >> "$GITHUB_OUTPUT"
-            echo "Update needed: $CURRENT_VERSION → $UPSTREAM_VERSION"
-          else
-            echo "needs_update=false" >> "$GITHUB_OUTPUT"
-            echo "Already up-to-date at $CURRENT_VERSION"
-          fi
-
-      - name: Sync prompts config files
-        if: steps.prompts.outputs.needs_update == 'true'
-        run: |
-          BASE_URL="https://raw.githubusercontent.com/pajew-ski/prompts/main"
-
-          # Always sync build.yaml (strip unsupported archs)
-          curl -sf "$BASE_URL/build.yaml" -o prompts/build.yaml
-          sed -i '/^\s*armhf:/d; /^\s*i386:/d' prompts/build.yaml
-
-          # Sync upstream config.yaml and inject image reference
-          UPSTREAM_CONFIG=$(curl -sf "$BASE_URL/config.yaml")
-          echo "$UPSTREAM_CONFIG" > prompts/config.yaml
-
-          # Strip unsupported architectures from arch list
-          sed -i '/^\s*- armhf$/d; /^\s*- i386$/d' prompts/config.yaml
-
-          # Add image field if not already present
-          if ! grep -q '^image:' prompts/config.yaml; then
-            echo 'image: "ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection/{arch}-prompts"' \
-              >> prompts/config.yaml
-          fi
-
-          # Sync optional display assets (ignore 404s)
-          curl -sf "$BASE_URL/icon.png" -o prompts/icon.png  2>/dev/null || true
-          curl -sf "$BASE_URL/logo.png" -o prompts/logo.png  2>/dev/null || true
-
-      - name: Build and push prompts Docker images
-        if: steps.prompts.outputs.needs_update == 'true'
+      - name: Build and push ${{ matrix.slug }} images
         env:
-          VERSION: ${{ steps.prompts.outputs.upstream }}
-          REGISTRY: ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection
+          SLUG: ${{ matrix.slug }}
+          REPO: ${{ matrix.repo }}
+          SHA: ${{ matrix.sha }}
+          VERSION: ${{ matrix.version }}
+          PORT: ${{ matrix.port }}
+          ARCHS: ${{ matrix.archs }}
         run: |
-          git clone --depth 1 https://github.com/pajew-ski/prompts /tmp/prompts-source
+          set -euo pipefail
+          BUILD_DIR=$(mktemp -d)
+          cp static-app/Dockerfile "$BUILD_DIR/"
+          curl -sf "https://raw.githubusercontent.com/${REPO}/${SHA}/index.html" -o "$BUILD_DIR/index.html"
 
-          declare -A PLATFORM_MAP=(
-            [amd64]=linux/amd64
-            [aarch64]=linux/arm64
-            [armv7]=linux/arm/v7
-            [armhf]=linux/arm/v6
-            [i386]=linux/386
-          )
-
-          for ARCH in amd64 aarch64 armv7; do
-            BASE_IMAGE="ghcr.io/home-assistant/${ARCH}-base:latest"
-            PLATFORM="${PLATFORM_MAP[$ARCH]}"
-            IMAGE_TAG="${REGISTRY}/${ARCH}-prompts"
-
-            echo "Building $IMAGE_TAG:$VERSION for $PLATFORM …"
+          declare -A PLATFORM=([amd64]=linux/amd64 [aarch64]=linux/arm64 [armv7]=linux/arm/v7)
+          for ARCH in $ARCHS; do
+            IMAGE="${REGISTRY}/${ARCH}-${SLUG}"
+            echo "Building ${IMAGE}:${VERSION} for ${PLATFORM[$ARCH]}"
             docker buildx build \
-              --platform "$PLATFORM" \
-              --build-arg BUILD_FROM="$BASE_IMAGE" \
-              --tag "${IMAGE_TAG}:${VERSION}" \
-              --tag "${IMAGE_TAG}:latest" \
-              --push \
-              /tmp/prompts-source
-          done
-
-      - name: Make prompts packages public
-        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'prompts' }}
-        env:
-          GH_TOKEN: ${{ secrets.PAT_PACKAGES || secrets.GITHUB_TOKEN }}
-        run: |
-          for ARCH in amd64 aarch64 armv7; do
-            PACKAGE="home-assistant-apps-collection%2F${ARCH}-prompts"
-            gh api --method PATCH \
-              -H "Accept: application/vnd.github+json" \
-              "/user/packages/container/${PACKAGE}" \
-              -f visibility=public \
-              2>/dev/null \
-              && echo "${ARCH}-prompts → public" \
-              || echo "${ARCH}-prompts: visibility update skipped (may already be public or token lacks scope)"
-          done
-
-      - name: Commit and push changes
-        if: steps.prompts.outputs.needs_update == 'true'
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add prompts/
-          git diff --cached --quiet || \
-            git commit -m "chore(prompts): sync to v${{ steps.prompts.outputs.upstream }}"
-          git push
-
-      # -----------------------------------------------------------------------
-      # open-entrainer – https://github.com/pajew-ski/open-entrainer
-      # -----------------------------------------------------------------------
-      - name: Check open-entrainer for updates
-        id: open_entrainer
-        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'open-entrainer' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          API_RESPONSE=$(curl -sf \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            "https://api.github.com/repos/pajew-ski/open-entrainer/commits?path=index.html&per_page=1")
-
-          UPSTREAM_VERSION=$(echo "$API_RESPONSE" | python3 -c \
-            'import sys,json; d=json.load(sys.stdin)[0]["commit"]["committer"]["date"][:10].split("-"); print(d[0]+"."+str(int(d[1]))+"."+str(int(d[2])))')
-
-          CURRENT_VERSION=$(grep '^version:' open-entrainer/config.yaml \
-            | awk '{print $2}' | tr -d '"')
-
-          echo "upstream=$UPSTREAM_VERSION" >> "$GITHUB_OUTPUT"
-          echo "current=$CURRENT_VERSION"   >> "$GITHUB_OUTPUT"
-
-          if [ "$UPSTREAM_VERSION" != "$CURRENT_VERSION" ] \
-             || [ "${{ inputs.force }}" = "true" ]; then
-            echo "needs_update=true" >> "$GITHUB_OUTPUT"
-            echo "Update needed: $CURRENT_VERSION → $UPSTREAM_VERSION"
-          else
-            echo "needs_update=false" >> "$GITHUB_OUTPUT"
-            echo "Already up-to-date at $CURRENT_VERSION"
-          fi
-
-      - name: Build and push open-entrainer Docker images
-        if: steps.open_entrainer.outputs.needs_update == 'true'
-        env:
-          VERSION: ${{ steps.open_entrainer.outputs.upstream }}
-          REGISTRY: ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection
-        run: |
-          export BUILD_DIR=$(mktemp -d)
-
-          curl -sf \
-            "https://raw.githubusercontent.com/pajew-ski/open-entrainer/main/index.html" \
-            -o "$BUILD_DIR/index.html"
-
-          python3 -c 'import os; open(os.environ["BUILD_DIR"]+"/Dockerfile","w").write("ARG BUILD_FROM\nFROM ${BUILD_FROM}\nRUN apk add --no-cache nginx\nRUN echo \"server { listen 8100; root /www; index index.html; }\" > /etc/nginx/http.d/default.conf\nCOPY index.html /www/index.html\nEXPOSE 8100\nENTRYPOINT []\nCMD [\"nginx\", \"-g\", \"daemon off;\"]\n")'
-
-          declare -A PLATFORM_MAP=(
-            [amd64]=linux/amd64
-            [aarch64]=linux/arm64
-            [armv7]=linux/arm/v7
-          )
-
-          for ARCH in amd64 aarch64 armv7; do
-            BASE_IMAGE="ghcr.io/home-assistant/${ARCH}-base:latest"
-            PLATFORM="${PLATFORM_MAP[$ARCH]}"
-            IMAGE_TAG="${REGISTRY}/${ARCH}-open-entrainer"
-
-            echo "Building $IMAGE_TAG:$VERSION for $PLATFORM …"
-            docker buildx build \
-              --platform "$PLATFORM" \
-              --build-arg BUILD_FROM="$BASE_IMAGE" \
-              --tag "${IMAGE_TAG}:${VERSION}" \
-              --tag "${IMAGE_TAG}:latest" \
+              --platform "${PLATFORM[$ARCH]}" \
+              --build-arg BUILD_FROM="ghcr.io/home-assistant/${ARCH}-base:latest" \
+              --build-arg BUILD_ARCH="$ARCH" \
+              --build-arg BUILD_VERSION="$VERSION" \
+              --build-arg PORT="$PORT" \
+              --provenance=false \
+              --tag "${IMAGE}:${VERSION}" \
+              --tag "${IMAGE}:latest" \
               --push \
               "$BUILD_DIR"
           done
 
-          # Update version in config.yaml
-          sed -i "s/^version:.*/version: \"$VERSION\"/" open-entrainer/config.yaml
+          mkdir -p built
+          jq -n --arg slug "$SLUG" --arg version "$VERSION" --arg sha "$SHA" --arg archs "$ARCHS" \
+            '{slug: $slug, version: $version, sha: $sha, archs: $archs}' > "built/${SLUG}.json"
 
-      - name: Make open-entrainer packages public
-        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'open-entrainer' }}
-        env:
-          GH_TOKEN: ${{ secrets.PAT_PACKAGES || secrets.GITHUB_TOKEN }}
+      - name: Record the build
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-${{ matrix.slug }}
+          path: built/${{ matrix.slug }}.json
+          retention-days: 1
+
+  static-publish:
+    needs: [static-check, static-build]
+    if: ${{ !cancelled() && needs.static-check.outputs.any == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout collection
+        uses: actions/checkout@v5
+
+      - name: Collect the builds that succeeded
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: built-*
+          path: built
+          merge-multiple: true
+
+      - name: Write versions
+        id: publish
+        run: python3 .github/scripts/static_apps.py publish
+
+      - name: Check that the images are public
         run: |
-          for ARCH in amd64 aarch64 armv7; do
-            PACKAGE="home-assistant-apps-collection%2F${ARCH}-open-entrainer"
-            gh api --method PATCH \
-              -H "Accept: application/vnd.github+json" \
-              "/user/packages/container/${PACKAGE}" \
-              -f visibility=public \
-              2>/dev/null \
-              && echo "${ARCH}-open-entrainer → public" \
-              || echo "${ARCH}-open-entrainer: visibility update skipped (may already be public or token lacks scope)"
-          done
+          IMAGES=$(jq -r --arg reg "${REGISTRY#ghcr.io/}" '.slug as $s | .archs | split(" ")[] | "\($reg)/\(.)-\($s)"' built/*.json 2>/dev/null || true)
+          [ -z "$IMAGES" ] || .github/scripts/check-public.sh $IMAGES
 
-      - name: Commit and push open-entrainer changes
-        if: steps.open_entrainer.outputs.needs_update == 'true'
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add open-entrainer/
-          git diff --cached --quiet || \
-            git commit -m "chore(open-entrainer): sync to v${{ steps.open_entrainer.outputs.upstream }}"
-          git push
-
-      # -----------------------------------------------------------------------
-      # open-desensitizer – https://github.com/pajew-ski/open-desensitizer
-      # -----------------------------------------------------------------------
-      - name: Check open-desensitizer for updates
-        id: open_desensitizer
-        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'open-desensitizer' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          API_RESPONSE=$(curl -sf \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            "https://api.github.com/repos/pajew-ski/open-desensitizer/commits?path=index.html&per_page=1")
-
-          UPSTREAM_VERSION=$(echo "$API_RESPONSE" | python3 -c \
-            'import sys,json; d=json.load(sys.stdin)[0]["commit"]["committer"]["date"][:10].split("-"); print(d[0]+"."+str(int(d[1]))+"."+str(int(d[2])))')
-
-          CURRENT_VERSION=$(grep '^version:' open-desensitizer/config.yaml \
-            | awk '{print $2}' | tr -d '"')
-
-          echo "upstream=$UPSTREAM_VERSION" >> "$GITHUB_OUTPUT"
-          echo "current=$CURRENT_VERSION"   >> "$GITHUB_OUTPUT"
-
-          if [ "$UPSTREAM_VERSION" != "$CURRENT_VERSION" ] \
-             || [ "${{ inputs.force }}" = "true" ]; then
-            echo "needs_update=true" >> "$GITHUB_OUTPUT"
-            echo "Update needed: $CURRENT_VERSION → $UPSTREAM_VERSION"
-          else
-            echo "needs_update=false" >> "$GITHUB_OUTPUT"
-            echo "Already up-to-date at $CURRENT_VERSION"
-          fi
-
-      - name: Build and push open-desensitizer Docker images
-        if: steps.open_desensitizer.outputs.needs_update == 'true'
-        env:
-          VERSION: ${{ steps.open_desensitizer.outputs.upstream }}
-          REGISTRY: ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection
-        run: |
-          export BUILD_DIR=$(mktemp -d)
-
-          curl -sf \
-            "https://raw.githubusercontent.com/pajew-ski/open-desensitizer/main/index.html" \
-            -o "$BUILD_DIR/index.html"
-
-          python3 -c 'import os; open(os.environ["BUILD_DIR"]+"/Dockerfile","w").write("ARG BUILD_FROM\nFROM ${BUILD_FROM}\nRUN apk add --no-cache nginx\nRUN echo \"server { listen 8101; root /www; index index.html; }\" > /etc/nginx/http.d/default.conf\nCOPY index.html /www/index.html\nEXPOSE 8101\nENTRYPOINT []\nCMD [\"nginx\", \"-g\", \"daemon off;\"]\n")'
-
-          declare -A PLATFORM_MAP=(
-            [amd64]=linux/amd64
-            [aarch64]=linux/arm64
-            [armv7]=linux/arm/v7
-          )
-
-          for ARCH in amd64 aarch64 armv7; do
-            BASE_IMAGE="ghcr.io/home-assistant/${ARCH}-base:latest"
-            PLATFORM="${PLATFORM_MAP[$ARCH]}"
-            IMAGE_TAG="${REGISTRY}/${ARCH}-open-desensitizer"
-
-            echo "Building $IMAGE_TAG:$VERSION for $PLATFORM …"
-            docker buildx build \
-              --platform "$PLATFORM" \
-              --build-arg BUILD_FROM="$BASE_IMAGE" \
-              --tag "${IMAGE_TAG}:${VERSION}" \
-              --tag "${IMAGE_TAG}:latest" \
-              --push \
-              "$BUILD_DIR"
-          done
-
-          # Update version in config.yaml
-          sed -i "s/^version:.*/version: \"$VERSION\"/" open-desensitizer/config.yaml
-
-      - name: Make open-desensitizer packages public
-        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'open-desensitizer' }}
-        env:
-          GH_TOKEN: ${{ secrets.PAT_PACKAGES || secrets.GITHUB_TOKEN }}
-        run: |
-          for ARCH in amd64 aarch64 armv7; do
-            PACKAGE="home-assistant-apps-collection%2F${ARCH}-open-desensitizer"
-            gh api --method PATCH \
-              -H "Accept: application/vnd.github+json" \
-              "/user/packages/container/${PACKAGE}" \
-              -f visibility=public \
-              2>/dev/null \
-              && echo "${ARCH}-open-desensitizer → public" \
-              || echo "${ARCH}-open-desensitizer: visibility update skipped (may already be public or token lacks scope)"
-          done
-
-      - name: Commit and push open-desensitizer changes
-        if: steps.open_desensitizer.outputs.needs_update == 'true'
+      - name: Commit and push static app changes
+        if: steps.publish.outputs.summary != ''
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add open-desensitizer/
-          git diff --cached --quiet || \
-            git commit -m "chore(open-desensitizer): sync to v${{ steps.open_desensitizer.outputs.upstream }}"
-          git push
+          git add -A -- $(jq -r '.slug' built/*.json)
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(static apps): sync ${{ steps.publish.outputs.summary }}"
+          for DELAY in 2 4 8 16; do
+            git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME" && exit 0
+            sleep "$DELAY"
+          done
+          exit 1
 
-      # -----------------------------------------------------------------------
-      # exocortex – custom dockerfile (self-contained in this repo)
-      # -----------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
+  # exocortex – custom Dockerfile, self-contained in this repo
+  #
+  # Code changes bump the {semver} part of exocortex/config.yaml by hand. A
+  # version whose images are not in the registry yet is built; a forced run
+  # increments the packaging suffix and rebuilds.
+  # ---------------------------------------------------------------------------
+  exocortex:
+    if: ${{ (inputs.addon || github.event.client_payload.slug || '') == '' || (inputs.addon || github.event.client_payload.slug) == 'exocortex' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout collection
+        uses: actions/checkout@v5
+
       - name: Check exocortex for updates
         id: exocortex
-        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'exocortex' }}
         run: |
           CURRENT_VERSION=$(grep '^version:' exocortex/config.yaml \
             | awk '{print $2}' | tr -d '"')
           CURRENT_UPSTREAM=$(echo "$CURRENT_VERSION" | sed 's/\.[0-9]*$//')
           PACKAGING_VER=$(echo "$CURRENT_VERSION" | sed 's/.*\.\([0-9]*\)$/\1/')
 
-          echo "upstream=$CURRENT_UPSTREAM"           >> "$GITHUB_OUTPUT"
-          echo "current=$CURRENT_VERSION"             >> "$GITHUB_OUTPUT"
+          # Is the image of this exact version in the registry, for every arch?
+          published() {
+            local repo="${REGISTRY#ghcr.io/}/$1-exocortex" token
+            token=$(curl -sf "https://ghcr.io/token?scope=repository:${repo}:pull" | jq -r '.token // empty')
+            [ -n "$token" ] && curl -sfI -H "Authorization: Bearer $token" \
+              -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json" \
+              "https://ghcr.io/v2/${repo}/manifests/${CURRENT_VERSION}" >/dev/null
+          }
 
-          if [ "${{ inputs.force }}" = "true" ]; then
+          if [ "$FORCE" = "true" ]; then
             NEW_VERSION="${CURRENT_UPSTREAM}.$((PACKAGING_VER + 1))"
-            echo "needs_update=true"                  >> "$GITHUB_OUTPUT"
-            echo "new_version=$NEW_VERSION"           >> "$GITHUB_OUTPUT"
+            echo "needs_update=true"        >> "$GITHUB_OUTPUT"
+            echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
             echo "Force rebuild: $CURRENT_VERSION → $NEW_VERSION"
+          elif ! published amd64 || ! published aarch64; then
+            echo "needs_update=true"            >> "$GITHUB_OUTPUT"
+            echo "new_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+            echo "No image for $CURRENT_VERSION yet: building it"
           else
-            echo "needs_update=false"                 >> "$GITHUB_OUTPUT"
-            echo "new_version=$CURRENT_VERSION"       >> "$GITHUB_OUTPUT"
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
             echo "Already up-to-date at $CURRENT_VERSION"
           fi
+
+      - name: Set up QEMU (multi-arch builds)
+        if: steps.exocortex.outputs.needs_update == 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: steps.exocortex.outputs.needs_update == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        if: steps.exocortex.outputs.needs_update == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push exocortex Docker images
         if: steps.exocortex.outputs.needs_update == 'true'
         env:
           NEW_VERSION: ${{ steps.exocortex.outputs.new_version }}
-          REGISTRY: ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection
         run: |
-          declare -A PLATFORM_MAP=(
-            [amd64]=linux/amd64
-            [aarch64]=linux/arm64
-          )
-
+          set -euo pipefail
+          declare -A PLATFORM=([amd64]=linux/amd64 [aarch64]=linux/arm64)
           for ARCH in amd64 aarch64; do
-            BASE_IMAGE="ghcr.io/home-assistant/${ARCH}-base-ubuntu:latest"
-            PLATFORM="${PLATFORM_MAP[$ARCH]}"
-            IMAGE_TAG="${REGISTRY}/${ARCH}-exocortex"
-
-            echo "Building $IMAGE_TAG:$NEW_VERSION for $PLATFORM …"
+            IMAGE="${REGISTRY}/${ARCH}-exocortex"
+            echo "Building ${IMAGE}:${NEW_VERSION} for ${PLATFORM[$ARCH]}"
             docker buildx build \
-              --platform "$PLATFORM" \
-              --build-arg BUILD_FROM="$BASE_IMAGE" \
+              --platform "${PLATFORM[$ARCH]}" \
+              --build-arg BUILD_FROM="ghcr.io/home-assistant/${ARCH}-base-ubuntu:latest" \
               --build-arg BUILD_ARCH="$ARCH" \
-              --build-arg EXOCORTEX_VERSION="${NEW_VERSION}" \
-              --tag "${IMAGE_TAG}:${NEW_VERSION}" \
-              --tag "${IMAGE_TAG}:latest" \
+              --build-arg EXOCORTEX_VERSION="$NEW_VERSION" \
+              --tag "${IMAGE}:${NEW_VERSION}" \
+              --tag "${IMAGE}:latest" \
               --push \
               exocortex/
           done
-
-          # Write the packaging version into config.yaml
           sed -i "s/^version:.*/version: \"$NEW_VERSION\"/" exocortex/config.yaml
 
-      - name: Make exocortex packages public
-        if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'exocortex' }}
-        env:
-          GH_TOKEN: ${{ secrets.PAT_PACKAGES || secrets.GITHUB_TOKEN }}
-        run: |
-          for ARCH in amd64 aarch64; do
-            PACKAGE="home-assistant-apps-collection%2F${ARCH}-exocortex"
-            gh api --method PATCH \
-              -H "Accept: application/vnd.github+json" \
-              "/user/packages/container/${PACKAGE}" \
-              -f visibility=public \
-              2>/dev/null \
-              && echo "${ARCH}-exocortex → public" \
-              || echo "${ARCH}-exocortex: visibility update skipped (may already be public or token lacks scope)"
-          done
+      - name: Check that the images are public
+        if: steps.exocortex.outputs.needs_update == 'true'
+        run: .github/scripts/check-public.sh "${REGISTRY#ghcr.io/}/amd64-exocortex" "${REGISTRY#ghcr.io/}/aarch64-exocortex"
 
       - name: Commit and push exocortex changes
         if: steps.exocortex.outputs.needs_update == 'true'
@@ -419,41 +275,42 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add exocortex/
-          git diff --cached --quiet || \
-            git commit -m "chore(exocortex): rebuild v${{ steps.exocortex.outputs.new_version }}"
-          git push
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(exocortex): rebuild v${{ steps.exocortex.outputs.new_version }}"
+          for DELAY in 2 4 8 16; do
+            git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME" && exit 0
+            sleep "$DELAY"
+          done
+          exit 1
 
   # ---------------------------------------------------------------------------
   # open-workspace – https://github.com/pajew-ski/open-workspace
   #
-  # Eigene Jobs statt Schritte im sync-Job:
-  # - Der Build (bun install + next build) läuft nativ je Architektur;
-  #   aarch64 unter QEMU wäre langsam und bun unter Emulation unzuverlässig.
-  # - Upstream führt keine Versionsnummer pro Änderung (config.yaml bleibt
-  #   auf 0.1.0). Die Add-on-Version ist deshalb
-  #   {upstream_version}.{Commit-Zeitpunkt YYYYMMDDHHMM} des gebauten Commits.
-  # - Gebaut wird nur ein Commit, dessen Upstream-CI grün ist, und nur, wenn
-  #   sich seit dem zuletzt gebauten Commit (open-workspace/.upstream-sha)
-  #   etwas geändert hat, das im Image oder im Add-on-Manifest landet.
-  # - Die config.yaml wird erst nach erfolgreichem Push aller Images
-  #   committet: Home Assistant sieht nie eine Version ohne Image.
+  # Own jobs instead of the static path:
+  # - The build (bun install + next build) runs natively per arch; aarch64
+  #   under QEMU would be slow, and bun under emulation is unreliable.
+  # - Upstream keeps no version per change (config.yaml stays at 0.1.0). The
+  #   add-on version is {upstream_version}.{commit time YYYYMMDDHHMM}.
+  # - Only a commit whose upstream CI is green is built, and only when
+  #   something that ends up in the image or the manifest changed since the
+  #   last built commit (open-workspace/.upstream-sha).
+  # - config.yaml is committed only after all images are pushed.
   # ---------------------------------------------------------------------------
   open-workspace-check:
+    if: ${{ (inputs.addon || github.event.client_payload.slug || '') == '' || (inputs.addon || github.event.client_payload.slug) == 'open-workspace' }}
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.addon == '' || github.event.inputs.addon == 'open-workspace' }}
     outputs:
       needs_update: ${{ steps.check.outputs.needs_update }}
       sha: ${{ steps.check.outputs.sha }}
       version: ${{ steps.check.outputs.version }}
     steps:
       - name: Checkout collection
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Check open-workspace for updates
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FORCE: ${{ inputs.force }}
         run: |
           set -euo pipefail
           API=https://api.github.com/repos/pajew-ski/open-workspace
@@ -468,8 +325,8 @@ jobs:
             "https://raw.githubusercontent.com/pajew-ski/open-workspace/$SHA/deploy/ha-addon/config.yaml" \
             | grep '^version:' | awk '{print $2}' | tr -d '"')
           STAMP=$(date -u -d "$COMMIT_DATE" +%Y%m%d%H%M)
-          # Erzwungener Neubau desselben Commits braucht eine neue Version,
-          # sonst bietet Home Assistant kein Update an.
+          # A forced rebuild of the same commit needs a new version, or Home
+          # Assistant offers no update.
           if [ "$FORCE" = "true" ] && [ "$SHA" = "$LAST_SHA" ]; then
             STAMP=$(date -u +%Y%m%d%H%M)
           fi
@@ -483,9 +340,9 @@ jobs:
           if [ "$FORCE" != "true" ]; then
             [ "$SHA" = "$LAST_SHA" ] && skip "Already up-to-date at ${SHA:0:7}"
 
-            # Nur Änderungen, die ins Image oder ins Manifest gehen, lösen
-            # einen Neubau aus. Unbekannter Vorgänger (erster Lauf, Upstream-
-            # History umgeschrieben) oder >= 300 Dateien: neu bauen.
+            # Only changes that end up in the image or the manifest trigger a
+            # rebuild. Unknown predecessor (first run, rewritten upstream
+            # history) or 300 files or more: rebuild.
             RELEVANT='^(src|scripts|public|seed|ontology|deploy/ha-addon)/|^(Dockerfile|\.dockerignore|package\.json|bun\.lock|next\.config\.ts|tsconfig\.json)$'
             if [ -n "$LAST_SHA" ] && COMPARE=$(api "compare/${LAST_SHA}...${SHA}"); then
               FILES=$(jq -r '.files[].filename' <<<"$COMPARE")
@@ -496,8 +353,8 @@ jobs:
             fi
           fi
 
-          # Upstream-CI muss für genau diesen Commit abgeschlossen und grün
-          # sein. Läuft sie noch, holt der nächste Lauf das Update nach.
+          # Upstream CI must have completed green for exactly this commit. If
+          # it is still running, the next run picks the update up.
           RUNS=$(api "commits/$SHA/check-runs?per_page=100")
           TOTAL=$(jq '.total_count' <<<"$RUNS")
           PENDING=$(jq '[.check_runs[] | select(.status != "completed")] | length' <<<"$RUNS")
@@ -527,7 +384,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout open-workspace
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: pajew-ski/open-workspace
           ref: ${{ needs.open-workspace-check.outputs.sha }}
@@ -542,8 +399,8 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Upstream-Dockerfile ohne BUILD_FROM: es bringt seine eigenen
-      # Basis-Images mit (oven/bun, node:22-alpine) — daher nur amd64/aarch64.
+      # The upstream Dockerfile takes no BUILD_FROM: it brings its own base
+      # images (oven/bun, node:22-alpine), hence amd64 and aarch64 only.
       - name: Build and push open-workspace ${{ matrix.arch }} image
         uses: docker/build-push-action@v6
         with:
@@ -553,38 +410,20 @@ jobs:
           provenance: false
           sbom: false
           tags: |
-            ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection/${{ matrix.arch }}-open-workspace:${{ needs.open-workspace-check.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/home-assistant-apps-collection/${{ matrix.arch }}-open-workspace:latest
+            ${{ env.REGISTRY }}/${{ matrix.arch }}-open-workspace:${{ needs.open-workspace-check.outputs.version }}
+            ${{ env.REGISTRY }}/${{ matrix.arch }}-open-workspace:latest
           cache-from: type=gha,scope=open-workspace-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=open-workspace-${{ matrix.arch }}
 
   open-workspace-publish:
-    # Nach dem sync-Job, damit beide nicht gleichzeitig auf den Branch pushen;
-    # dessen Ergebnis spielt keine Rolle.
-    needs: [sync, open-workspace-check, open-workspace-build]
-    if: ${{ !cancelled() && needs.open-workspace-check.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.open-workspace-build.result) }}
+    needs: [open-workspace-check, open-workspace-build]
+    if: ${{ !cancelled() && needs.open-workspace-check.outputs.needs_update == 'true' && needs.open-workspace-build.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout collection
-        uses: actions/checkout@v4
-
-      - name: Make open-workspace packages public
-        env:
-          GH_TOKEN: ${{ secrets.PAT_PACKAGES || secrets.GITHUB_TOKEN }}
-        run: |
-          for ARCH in amd64 aarch64; do
-            PACKAGE="home-assistant-apps-collection%2F${ARCH}-open-workspace"
-            gh api --method PATCH \
-              -H "Accept: application/vnd.github+json" \
-              "/user/packages/container/${PACKAGE}" \
-              -f visibility=public \
-              2>/dev/null \
-              && echo "${ARCH}-open-workspace → public" \
-              || echo "${ARCH}-open-workspace: visibility update skipped (may already be public or token lacks scope)"
-          done
+        uses: actions/checkout@v5
 
       - name: Sync open-workspace config files
-        if: needs.open-workspace-check.outputs.needs_update == 'true'
         env:
           SHA: ${{ needs.open-workspace-check.outputs.sha }}
           VERSION: ${{ needs.open-workspace-check.outputs.version }}
@@ -594,8 +433,8 @@ jobs:
           BASE_URL="https://raw.githubusercontent.com/pajew-ski/open-workspace/$SHA"
           mkdir -p open-workspace
 
-          # Manifest liegt upstream unter deploy/ha-addon/. Dessen image-Feld
-          # zeigt auf ein Image, das upstream nicht baut: ersetzen.
+          # The manifest lives under deploy/ha-addon/ upstream. Its image field
+          # points to an image upstream never builds: replace it.
           curl -sf "$BASE_URL/deploy/ha-addon/config.yaml" -o open-workspace/config.yaml
           sed -i -E \
             -e "s|^image:.*|image: \"$IMAGE\"|" \
@@ -606,7 +445,7 @@ jobs:
             || echo "image: \"$IMAGE\"" >> open-workspace/config.yaml
           grep -q "^version: \"$VERSION\"$" open-workspace/config.yaml
 
-          # Relative Links in DOCS.md zeigen upstream ins Repo.
+          # Relative links in DOCS.md point into the upstream repository.
           curl -sf "$BASE_URL/deploy/ha-addon/DOCS.md" \
             | sed -E 's#\]\(\.\./\.\./#](https://github.com/pajew-ski/open-workspace/blob/main/#g' \
             > open-workspace/DOCS.md
@@ -615,8 +454,10 @@ jobs:
 
           echo "$SHA" > open-workspace/.upstream-sha
 
+      - name: Check that the images are public
+        run: .github/scripts/check-public.sh "${REGISTRY#ghcr.io/}/amd64-open-workspace" "${REGISTRY#ghcr.io/}/aarch64-open-workspace"
+
       - name: Commit and push open-workspace changes
-        if: needs.open-workspace-check.outputs.needs_update == 'true'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

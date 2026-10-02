@@ -1,0 +1,25 @@
+name: "Open Helix"
+description: "A Shepard-Risset glissando. A tone that keeps rising or falling and never arrives, every parameter adjustable, with a live spectrogram. English and German."
+version: "0.0.0"
+slug: open-helix
+url: "https://github.com/pajew-ski/open-helix"
+arch:
+    - amd64
+    - aarch64
+    - armv7
+startup: application
+boot: auto
+init: false
+ingress: true
+ingress_port: 8102
+ingress_entry: "/"
+panel_icon: "mdi:stairs-up"
+panel_title: "Open Helix"
+panel_admin: false
+image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-open-helix"
+ports:
+    8102/tcp: null
+ports_description:
+    8102/tcp: "Web UI"
+options: {}
+schema: {}

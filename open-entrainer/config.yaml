@@ -1,5 +1,5 @@
 name: "Open Entrainer"
-description: "Binaural beats generator for brainwave entrainment – Delta, Theta, Alpha, Beta, Gamma."
+description: "A binaural beat generator. Two tones a few hertz apart, ramped along a curve you set, with pink noise underneath. English and German."
 version: "2026.9.25"
 slug: open-entrainer
 url: "https://github.com/pajew-ski/open-entrainer"

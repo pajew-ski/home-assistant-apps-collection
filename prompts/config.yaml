@@ -1,5 +1,5 @@
 name: "Prompts"
-description: "100+ KI-Prompting-Strategien – durchsuchbar, filterbar, sofort kopierbar."
+description: "A hundred prompting strategies for language models in English and German, plus skills and agent instructions. Search, unfold, copy."
 version: "1.0.4"
 slug: "prompts"
 url: "https://github.com/pajew-ski/prompts"
@@ -16,13 +16,10 @@ ingress_entry: "/"
 panel_icon: "mdi:head-lightbulb"
 panel_title: "Prompts"
 panel_admin: false
+image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-prompts"
 ports:
     8099/tcp: null
 ports_description:
     8099/tcp: "Web UI"
-map:
-    - type: config
-      read_only: true
 options: {}
 schema: {}
-image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-prompts"
