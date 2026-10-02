@@ -1,6 +1,6 @@
 name: "Open Desensitizer"
 description: "Bilateral stimulation. A dot moves from side to side, an optional tone follows it, and a grounding exercise is one key away. English and German."
-version: "2026.9.11"
+version: "2026.10.2.1335"
 slug: open-desensitizer
 url: "https://github.com/pajew-ski/open-desensitizer"
 arch:

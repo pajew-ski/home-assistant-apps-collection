@@ -1,6 +1,6 @@
 name: "Prompts"
 description: "A hundred prompting strategies for language models in English and German, plus skills and agent instructions. Search, unfold, copy."
-version: "1.0.4"
+version: "2026.10.2.1414"
 slug: "prompts"
 url: "https://github.com/pajew-ski/prompts"
 arch:

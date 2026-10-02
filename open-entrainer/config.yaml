@@ -1,6 +1,6 @@
 name: "Open Entrainer"
 description: "A binaural beat generator. Two tones a few hertz apart, ramped along a curve you set, with pink noise underneath. English and German."
-version: "2026.9.25"
+version: "2026.9.30.1731"
 slug: open-entrainer
 url: "https://github.com/pajew-ski/open-entrainer"
 arch:

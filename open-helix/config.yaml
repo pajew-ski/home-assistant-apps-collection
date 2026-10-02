@@ -1,6 +1,6 @@
 name: "Open Helix"
 description: "A Shepard-Risset glissando. A tone that keeps rising or falling and never arrives, every parameter adjustable, with a live spectrogram. English and German."
-version: "0.0.0"
+version: "2026.9.30.1731"
 slug: open-helix
 url: "https://github.com/pajew-ski/open-helix"
 arch:
