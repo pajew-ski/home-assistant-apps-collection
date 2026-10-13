@@ -52,6 +52,7 @@ home-assistant-apps-collection/
 │   ├── DOCS.md
 │   ├── icon.png
 │   └── .upstream-sha
+├── architektur/               # Custom add-on: Structurizr local behind nginx
 └── exocortex/                 # Custom add-on (self-contained in this repo)
     ├── Dockerfile
     ├── build.yaml
@@ -84,8 +85,9 @@ home-assistant-apps-collection/
 | `open-helix` | static app | https://github.com/pajew-ski/open-helix |
 | `open-workspace` | upstream mirror (commit-versioned, CI-gated) | https://github.com/pajew-ski/open-workspace |
 | `exocortex` | custom dockerfile | self-contained in this repo |
+| `architektur` | custom dockerfile | self-contained in this repo, `FROM structurizr/structurizr` |
 
-Ingress ports: prompts 8099, open-entrainer 8100, open-desensitizer 8101, open-helix 8102.
+Ingress ports: prompts 8099, open-entrainer 8100, open-desensitizer 8101, open-helix 8102, architektur 8103.
 
 ---
 
@@ -242,6 +244,16 @@ Actions → Sync Add-ons → Run workflow → slug: `exocortex`, Force rebuild: 
 
 **Architecture support:** `amd64`, `aarch64` only (Ubuntu base image required for
 the bundled Oxigraph binary; Alpine is not used).
+
+---
+
+## Architektur — Custom Add-on
+
+Renders the C4 model of `/config/architektur` with `structurizr local`, behind nginx on the ingress port. Details for users in `architektur/DOCS.md`; what matters for maintenance:
+
+- **Versioning:** `{structurizr release}.{packaging}`, e.g. `2026.9.19.0`. The `Dockerfile` pins `structurizr/structurizr` by digest and Dependabot proposes updates (`.github/dependabot.yml`). Such a PR bumps `version` in `architektur/config.yaml` too; the push to `main` under `architektur/` builds every version whose images are missing.
+- **Ingress prefix:** Structurizr writes absolute paths (`/static/`, `/workspace/`, `/api/`). `rootfs/etc/architektur/nginx.conf` rewrites them with `sub_filter` from `X-Ingress-Path`. A Structurizr update that adds a new kind of absolute path breaks the panel silently: after an update, open the panel and watch the browser's network tab for 404s.
+- **Never write to `/config`:** `run.sh` copies the model into `/data/workspace`. Structurizr writes `.structurizr/` and `workspace.json` into its data directory, and uncommitted files in the checkout of `/config` stop `config_holen`.
 
 ---
 

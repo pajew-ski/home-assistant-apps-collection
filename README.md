@@ -22,6 +22,7 @@ A single-link Home Assistant add-on repository that aggregates multiple add-ons.
 | [Open Helix](./open-helix/) | A Shepard-Risset glissando, every parameter adjustable, with a live spectrogram. | [pajew-ski/open-helix](https://github.com/pajew-ski/open-helix) |
 | [Open Workspace](./open-workspace/) | AI workspace with an RDF graph core, SPARQL, MCP server and federation (amd64, aarch64). | [pajew-ski/open-workspace](https://github.com/pajew-ski/open-workspace) |
 | [Exocortex](./exocortex/) | Knowledge operating system with hybrid search, SPARQL graph, AI agent memory, MCP server and multi-agent orchestration. | [pajew-ski/home-assistant-apps-collection](https://github.com/pajew-ski/home-assistant-apps-collection) |
+| [Architektur](./architektur/) | C4 architecture model in Structurizr DSL from /config/architektur, rendered live with the state of Home Assistant (amd64, aarch64). | [pajew-ski/home-assistant-apps-collection](https://github.com/pajew-ski/home-assistant-apps-collection) |
 
 The store shows the current version of each add-on.
 
@@ -31,7 +32,7 @@ The [sync workflow](./.github/workflows/sync-addons.yml) builds every add-on's D
 
 - **Static apps** (Prompts, Open Entrainer, Open Desensitizer, Open Helix): the upstream is one `index.html`, served by nginx from a shared [Dockerfile](./static-app/Dockerfile) for amd64, aarch64 and armv7. Every commit that changes `index.html` on `main` becomes a version `YYYY.M.D.HHMM` from its commit time. The last built commit is kept in `<slug>/.upstream-sha`.
 - **Open Workspace** has no per-change version upstream. It is mirrored from every green `main` commit that touches the image or the add-on manifest, versioned as `{upstream version}.{commit time YYYYMMDDHHMM}`, and built natively for amd64 and aarch64.
-- **Exocortex** lives in this repository; a forced run rebuilds it with the next packaging version.
+- **Exocortex** and **Architektur** live in this repository; a forced run rebuilds them with the next packaging version.
 
 ## Adding a New Add-on
 
