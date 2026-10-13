@@ -284,9 +284,9 @@ jobs:
           exit 1
 
   # ---------------------------------------------------------------------------
-  # architektur – custom Dockerfile, FROM structurizr/structurizr
+  # architektur – custom Dockerfile, Structurizr built from source
   #
-  # A Structurizr update (Dependabot) bumps the release part of
+  # A new Structurizr commit or a Dependabot base-image update bumps
   # architektur/config.yaml in the same PR. A version whose images are not in
   # the registry yet is built; a forced run increments the packaging suffix.
   # ---------------------------------------------------------------------------

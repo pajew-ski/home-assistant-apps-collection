@@ -22,7 +22,7 @@ A single-link Home Assistant add-on repository that aggregates multiple add-ons.
 | [Open Helix](./open-helix/) | A Shepard-Risset glissando, every parameter adjustable, with a live spectrogram. | [pajew-ski/open-helix](https://github.com/pajew-ski/open-helix) |
 | [Open Workspace](./open-workspace/) | AI workspace with an RDF graph core, SPARQL, MCP server and federation (amd64, aarch64). | [pajew-ski/open-workspace](https://github.com/pajew-ski/open-workspace) |
 | [Exocortex](./exocortex/) | Knowledge operating system with hybrid search, SPARQL graph, AI agent memory, MCP server and multi-agent orchestration. | [pajew-ski/home-assistant-apps-collection](https://github.com/pajew-ski/home-assistant-apps-collection) |
-| [Architektur](./architektur/) | C4 architecture model in Structurizr DSL from /config/architektur, rendered live with the state of Home Assistant (amd64, aarch64). | [pajew-ski/home-assistant-apps-collection](https://github.com/pajew-ski/home-assistant-apps-collection) |
+| [Architektur](./architektur/) | C4 architecture model in Structurizr DSL from /config/architektur, rendered live with the state of Home Assistant; Structurizr built from its Apache-2.0 source (amd64, aarch64). | [pajew-ski/home-assistant-apps-collection](https://github.com/pajew-ski/home-assistant-apps-collection) |
 
 The store shows the current version of each add-on.
 
