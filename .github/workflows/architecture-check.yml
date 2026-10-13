@@ -1,0 +1,36 @@
+name: Architecture check
+
+# Builds the architecture image on every pull request that touches it and
+# talks to it inside the container, the way Home Assistant's ingress does.
+# Without this, a Dependabot bump of the Temurin images (or a Structurizr
+# commit) is first built after the merge, when it is already offered.
+
+on:
+  pull_request:
+    paths:
+      - 'architecture/**'
+      - '.github/workflows/architecture-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build the image (amd64)
+        run: docker build -t architecture:check architecture
+
+      - name: Start it and ask through nginx with an ingress prefix
+        run: |
+          docker run -d --name arch architecture:check
+          ask() { docker exec arch curl -sf -H 'X-Ingress-Path: /api/hassio_ingress/T' "http://127.0.0.1:8103$1"; }
+          for i in $(seq 1 60); do ask /workspace/1 >/dev/null && break; sleep 3; done
+          page=$(ask /workspace/1) || { docker logs arch; exit 1; }
+          # The API base handed to the client must carry the prefix (see CLAUDE.md, Ingress prefix).
+          grep -q '"/api/hassio_ingress/T/api",' <<<"$page" || { echo "API base not prefixed"; exit 1; }
+          ask /api/workspace/1 | jq -e '.name' >/dev/null || { echo "workspace API failed"; docker logs arch; exit 1; }
+          docker exec arch java -version 2>&1 | head -1
+          docker logs arch 2>&1 | tail -5

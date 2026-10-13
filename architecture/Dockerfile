@@ -30,6 +30,6 @@ COPY --from=bau /src/structurizr-application/target/structurizr-1.0.0.war /usr/l
 COPY --from=bau /src/structurizr-themes /usr/local/structurizr-themes
 COPY --from=bau /src/LICENSE /usr/local/share/doc/structurizr/LICENSE
 COPY rootfs/ /
-RUN chmod +x /etc/architektur/run.sh
+RUN chmod +x /etc/architecture/run.sh
 
-ENTRYPOINT ["/etc/architektur/run.sh"]
+ENTRYPOINT ["/etc/architecture/run.sh"]

@@ -69,12 +69,12 @@
       "custom_dockerfile": true
     },
     {
-      "slug": "architektur",
-      "name": "Architektur",
+      "slug": "architecture",
+      "name": "Architecture",
       "source": "https://github.com/pajew-ski/home-assistant-apps-collection",
       "branch": "main",
       "sync_files": [],
-      "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-architektur",
+      "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-architecture",
       "custom_dockerfile": true
     }
   ]

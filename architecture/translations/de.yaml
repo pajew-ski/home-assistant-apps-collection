@@ -1,0 +1,4 @@
+configuration:
+  folder:
+    name: Modellordner
+    description: Ordner unter /config mit der workspace.dsl, zum Beispiel "architecture".
