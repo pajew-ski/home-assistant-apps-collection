@@ -1,10 +1,18 @@
-# Architektur
+# Architecture
 
 Shows a C4 model written in [Structurizr DSL](https://docs.structurizr.com/dsl) as a sidebar panel, rendered by `structurizr local`.
 
 ## Where the model comes from
 
-The add-on reads `/config/architektur/workspace.dsl` (with `!include`, `!docs` and `!adrs` relative to it) and copies the folder into its own data directory every 30 seconds, so Structurizr never writes into `/config`. Without a model it shows a placeholder.
+The add-on reads `workspace.dsl` from the folder below `/config` named in the option **folder** (default `architecture`, so `/config/architecture/workspace.dsl`), with `!include`, `!docs` and `!adrs` relative to it. It copies the folder into its own data directory every 30 seconds, so Structurizr never writes into `/config`. Without a model it shows a placeholder.
+
+## Configuration
+
+| Option | Default | Meaning |
+|---|---|---|
+| `folder` | `architecture` | Folder below `/config` with `workspace.dsl`; plain path segments only, no `..` |
+
+The add-on configuration is labelled in English and German. Structurizr's own interface is English; the view picker on phones follows the browser language.
 
 ## Live state
 

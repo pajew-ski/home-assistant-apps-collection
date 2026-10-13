@@ -52,7 +52,7 @@ home-assistant-apps-collection/
 │   ├── DOCS.md
 │   ├── icon.png
 │   └── .upstream-sha
-├── architektur/               # Custom add-on: Structurizr local behind nginx
+├── architecture/              # Custom add-on: Structurizr local behind nginx
 └── exocortex/                 # Custom add-on (self-contained in this repo)
     ├── Dockerfile
     ├── build.yaml
@@ -85,9 +85,9 @@ home-assistant-apps-collection/
 | `open-helix` | static app | https://github.com/pajew-ski/open-helix |
 | `open-workspace` | upstream mirror (commit-versioned, CI-gated) | https://github.com/pajew-ski/open-workspace |
 | `exocortex` | custom dockerfile | self-contained in this repo |
-| `architektur` | custom dockerfile | self-contained in this repo, Structurizr built from source |
+| `architecture` | custom dockerfile | self-contained in this repo, Structurizr built from source |
 
-Ingress ports: prompts 8099, open-entrainer 8100, open-desensitizer 8101, open-helix 8102, architektur 8103.
+Ingress ports: prompts 8099, open-entrainer 8100, open-desensitizer 8101, open-helix 8102, architecture 8103.
 
 ---
 
@@ -247,13 +247,15 @@ the bundled Oxigraph binary; Alpine is not used).
 
 ---
 
-## Architektur — Custom Add-on
+## Architecture — Custom Add-on
 
-Renders the C4 model of `/config/architektur` with `structurizr local`, behind nginx on the ingress port. Details for users in `architektur/DOCS.md`; what matters for maintenance:
+Renders the C4 model of `/config/<folder>` (option `folder`, default `architecture`) with `structurizr local`, behind nginx on the ingress port. Details for users in `architecture/DOCS.md`; what matters for maintenance:
 
 - **License:** never `FROM structurizr/structurizr`. The prebuilt image carries Structurizr's closed server extensions, and nothing grants redistributing it; our images are public on ghcr.io. The `Dockerfile` builds the war from the Apache-2.0 source at a pinned commit and ships its `LICENSE`.
-- **Versioning:** `{date of the Structurizr commit}.{packaging}`, e.g. `2026.10.5.0`. Bump `STRUCTURIZR_COMMIT` in `architektur/Dockerfile` and `version` in `architektur/config.yaml` together; Dependabot only moves the Temurin base images, and such a PR needs a `version` bump too. The push to `main` under `architektur/` builds every version whose images are missing.
-- **Ingress prefix:** Structurizr writes absolute paths (`/static/`, `/workspace/`, `/api/`). `rootfs/etc/architektur/nginx.conf` rewrites them with `sub_filter` from `X-Ingress-Path`. Not every absolute-looking string is a path: the page hands `"/api",` to `StructurizrApiClient` as the API base (rewritten), and `structurizr-client.js` appends `"/workspace/"` to that base (must stay as is, so the double-quoted `/workspace/` rule only matches HTML attributes, `="/workspace/`). Test with an ingress path that starts with `/api/hassio_ingress/`, as the real one does. A Structurizr update that adds a new kind of absolute path breaks the panel silently: after an update, open the panel and watch the browser's network tab for 404s.
+- **Versioning:** `{date of the Structurizr commit}.{packaging}`, e.g. `2026.10.5.0`. Bump `STRUCTURIZR_COMMIT` in `architecture/Dockerfile` and `version` in `architecture/config.yaml` together; Dependabot only moves the Temurin base images, and such a PR needs a `version` bump too. The push to `main` under `architecture/` builds every version whose images are missing.
+- **Ingress prefix:** Structurizr writes absolute paths (`/static/`, `/workspace/`, `/api/`). `rootfs/etc/architecture/nginx.conf` rewrites them with `sub_filter` from `X-Ingress-Path`. Not every absolute-looking string is a path: the page hands `"/api",` to `StructurizrApiClient` as the API base (rewritten), and `structurizr-client.js` appends `"/workspace/"` to that base (must stay as is, so the double-quoted `/workspace/` rule only matches HTML attributes, `="/workspace/`). Test with an ingress path that starts with `/api/hassio_ingress/`, as the real one does. A Structurizr update that adds a new kind of absolute path breaks the panel silently: after an update, open the panel and watch the browser's network tab for 404s.
+- **Languages:** like the other add-ons, names and defaults are English and German is the second language: the add-on configuration through `translations/en.yaml` and `de.yaml`, the phone view picker through the browser language. The model itself is the user's content, in whatever language it is written.
+- **Renamed from `architektur` on 13.10.2026:** new slug, new images `{arch}-architecture`. The old packages `{arch}-architektur` on ghcr.io are orphaned and can be deleted by hand.
 - **Never write to `/config`:** `run.sh` copies the model into `/data/workspace`. Structurizr writes `.structurizr/` and `workspace.json` into its data directory, and uncommitted files in the checkout of `/config` stop `config_holen`.
 
 ---
