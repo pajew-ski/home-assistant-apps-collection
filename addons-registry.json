@@ -67,6 +67,15 @@
       "sync_files": [],
       "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-exocortex",
       "custom_dockerfile": true
+    },
+    {
+      "slug": "architektur",
+      "name": "Architektur",
+      "source": "https://github.com/pajew-ski/home-assistant-apps-collection",
+      "branch": "main",
+      "sync_files": [],
+      "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-architektur",
+      "custom_dockerfile": true
     }
   ]
 }

@@ -1,0 +1,12 @@
+# Monthly, grouped, merged by hand (SOP Abhängigkeiten in pajew-ski/data).
+# Only the Temurin base images of architektur/ so far; the actions of this repository
+# follow with pajew-ski/data#423.
+version: 2
+updates:
+  - package-ecosystem: docker
+    directory: /architektur
+    schedule:
+      interval: monthly
+    groups:
+      architektur:
+        patterns: ["*"]
