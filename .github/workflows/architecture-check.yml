@@ -20,6 +20,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Check the panel script
+        run: node --check architecture/rootfs/etc/architecture/panel.js
+
       - name: Build the image (amd64)
         run: docker build -t architecture:check architecture
 
