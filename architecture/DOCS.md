@@ -20,7 +20,15 @@ A `!script` in the model (for example `live.groovy`) can read `SUPERVISOR_TOKEN`
 
 ## Access
 
-Ingress only, admin only. Structurizr runs read-only (`STRUCTURIZR_EDITABLE=false`) on `127.0.0.1:8080`; nginx on the ingress port puts the ingress prefix into Structurizr's absolute paths and adds pinch zoom and a view picker below 768 px.
+Ingress only, admin only. Structurizr runs read-only (`STRUCTURIZR_EDITABLE=false`) on `127.0.0.1:8080`; nginx on the ingress port puts the ingress prefix into Structurizr's absolute paths and opens the panel on the diagrams.
+
+## Theme and phone
+
+The panel follows the Home Assistant theme: background, cards, text, accent colour and font come from the theme's CSS variables, light or dark from the theme's dark mode, and both change with it. Structurizr's own light/dark switch is hidden. Opened outside Home Assistant, the system setting decides. The diagram elements keep the colours of the model's `styles`, with its `dark` block in dark mode.
+
+On a phone: one finger pans, two fingers zoom, a double tap zooms in threefold up to 1:1 and then back to the whole diagram, and a picker at the top chooses the view. The summary, documentation and decisions pages stack their columns at 360 px without sideways scrolling.
+
+A model that overrides a style in `dark` must define the same tag in `light` too, with every attribute. Structurizr otherwise writes the dark values into the unscoped definition once it renders in dark mode (the dark thumbnails do), and the light view stays dark afterwards.
 
 ## License
 
