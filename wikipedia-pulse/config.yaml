@@ -1,0 +1,14 @@
+name: Wikipedia Pulse
+version: "1.0.0.0"
+slug: wikipedia-pulse
+description: Live edit rate of all Wikimedia wikis and the articles most people are editing right now, served as JSON for a Home Assistant rest sensor.
+url: "https://github.com/pajew-ski/home-assistant-apps-collection/tree/main/wikipedia-pulse"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+# No ingress and no published port: Home Assistant reaches the add-on on the
+# internal network at http://037accb4-wikipedia-pulse:8104/.
+image: "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-wikipedia-pulse"

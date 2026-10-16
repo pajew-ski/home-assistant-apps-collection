@@ -7,7 +7,7 @@ name: Sync Add-ons
 #   after a merge to main (its notify workflow), with the slug as payload.
 # - schedule: hourly fallback. Every check compares against what was built
 #   last, so a run without changes only reads a few API endpoints.
-# - push to main under exocortex/ or architecture/: a version bump there is built at once.
+# - push to main under exocortex/, architecture/ or wikipedia-pulse/: a version bump there is built at once.
 # - workflow_dispatch: by hand, for one add-on or all, optionally forced.
 #
 # Pushes to main come from several jobs; each one rebases and retries, and the
@@ -18,7 +18,7 @@ on:
     types: [upstream-changed]
   push:
     branches: [main]
-    paths: ['exocortex/**', 'architecture/**']
+    paths: ['exocortex/**', 'architecture/**', 'wikipedia-pulse/**']
   schedule:
     - cron: '23 * * * *'
   workflow_dispatch:
@@ -375,6 +375,105 @@ jobs:
           git add architecture/
           git diff --cached --quiet && exit 0
           git commit -m "chore(architecture): rebuild v${{ steps.architecture.outputs.new_version }}"
+          for DELAY in 2 4 8 16; do
+            git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME" && exit 0
+            sleep "$DELAY"
+          done
+          exit 1
+
+  # ---------------------------------------------------------------------------
+  # wikipedia-pulse – custom Dockerfile, one Python script on the HA base image
+  #
+  # A change to pulse.py bumps the {semver} part of wikipedia-pulse/config.yaml
+  # in the same PR. A version whose images are not in the registry yet is
+  # built; a forced run increments the packaging suffix.
+  # ---------------------------------------------------------------------------
+  wikipedia-pulse:
+    if: ${{ (inputs.addon || github.event.client_payload.slug || '') == '' || (inputs.addon || github.event.client_payload.slug) == 'wikipedia-pulse' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout collection
+        uses: actions/checkout@v5
+
+      - name: Check wikipedia-pulse for updates
+        id: pulse
+        run: |
+          CURRENT_VERSION=$(grep '^version:' wikipedia-pulse/config.yaml \
+            | awk '{print $2}' | tr -d '"')
+          CURRENT_UPSTREAM=$(echo "$CURRENT_VERSION" | sed 's/\.[0-9]*$//')
+          PACKAGING_VER=$(echo "$CURRENT_VERSION" | sed 's/.*\.\([0-9]*\)$/\1/')
+
+          # Is the image of this exact version in the registry, for every arch?
+          published() {
+            local repo="${REGISTRY#ghcr.io/}/$1-wikipedia-pulse" token
+            token=$(curl -sf "https://ghcr.io/token?scope=repository:${repo}:pull" | jq -r '.token // empty')
+            [ -n "$token" ] && curl -sfI -H "Authorization: Bearer $token" \
+              -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json" \
+              "https://ghcr.io/v2/${repo}/manifests/${CURRENT_VERSION}" >/dev/null
+          }
+
+          if [ "$FORCE" = "true" ]; then
+            NEW_VERSION="${CURRENT_UPSTREAM}.$((PACKAGING_VER + 1))"
+            echo "needs_update=true"        >> "$GITHUB_OUTPUT"
+            echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+            echo "Force rebuild: $CURRENT_VERSION → $NEW_VERSION"
+          elif ! published amd64 || ! published aarch64; then
+            echo "needs_update=true"            >> "$GITHUB_OUTPUT"
+            echo "new_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+            echo "No image for $CURRENT_VERSION yet: building it"
+          else
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+            echo "Already up-to-date at $CURRENT_VERSION"
+          fi
+
+      - name: Set up QEMU (multi-arch builds)
+        if: steps.pulse.outputs.needs_update == 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: steps.pulse.outputs.needs_update == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        if: steps.pulse.outputs.needs_update == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push wikipedia-pulse Docker images
+        if: steps.pulse.outputs.needs_update == 'true'
+        env:
+          NEW_VERSION: ${{ steps.pulse.outputs.new_version }}
+        run: |
+          set -euo pipefail
+          declare -A PLATFORM=([amd64]=linux/amd64 [aarch64]=linux/arm64)
+          for ARCH in amd64 aarch64; do
+            IMAGE="${REGISTRY}/${ARCH}-wikipedia-pulse"
+            echo "Building ${IMAGE}:${NEW_VERSION} for ${PLATFORM[$ARCH]}"
+            docker buildx build \
+              --platform "${PLATFORM[$ARCH]}" \
+              --build-arg BUILD_FROM="ghcr.io/home-assistant/${ARCH}-base:latest" \
+              --tag "${IMAGE}:${NEW_VERSION}" \
+              --tag "${IMAGE}:latest" \
+              --push \
+              wikipedia-pulse/
+          done
+          sed -i "s/^version:.*/version: \"$NEW_VERSION\"/" wikipedia-pulse/config.yaml
+
+      - name: Check that the images are public
+        if: steps.pulse.outputs.needs_update == 'true'
+        run: .github/scripts/check-public.sh "${REGISTRY#ghcr.io/}/amd64-wikipedia-pulse" "${REGISTRY#ghcr.io/}/aarch64-wikipedia-pulse"
+
+      - name: Commit and push wikipedia-pulse changes
+        if: steps.pulse.outputs.needs_update == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add wikipedia-pulse/
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(wikipedia-pulse): rebuild v${{ steps.pulse.outputs.new_version }}"
           for DELAY in 2 4 8 16; do
             git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME" && exit 0
             sleep "$DELAY"
