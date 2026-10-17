@@ -53,6 +53,7 @@ home-assistant-apps-collection/
 │   ├── icon.png
 │   └── .upstream-sha
 ├── architecture/              # Custom add-on: Structurizr local behind nginx
+├── wikipedia-pulse/           # Custom add-on: one Python script, the Wikimedia edit stream as JSON
 └── exocortex/                 # Custom add-on (self-contained in this repo)
     ├── Dockerfile
     ├── build.yaml
@@ -86,8 +87,9 @@ home-assistant-apps-collection/
 | `open-workspace` | upstream mirror (commit-versioned, CI-gated) | https://github.com/pajew-ski/open-workspace |
 | `exocortex` | custom dockerfile | self-contained in this repo |
 | `architecture` | custom dockerfile | self-contained in this repo, Structurizr built from source |
+| `wikipedia-pulse` | custom dockerfile | self-contained in this repo, one Python script |
 
-Ingress ports: prompts 8099, open-entrainer 8100, open-desensitizer 8101, open-helix 8102, architecture 8103.
+Ingress ports: prompts 8099, open-entrainer 8100, open-desensitizer 8101, open-helix 8102, architecture 8103. Internal ports without ingress: wikipedia-pulse 8104.
 
 ---
 
@@ -258,6 +260,17 @@ Renders the C4 model of `/config/<folder>` (option `folder`, default `architectu
 - **Languages:** like the other add-ons, names and defaults are English and German is the second language: the add-on configuration through `translations/en.yaml` and `de.yaml`, the phone view picker through the browser language. The model itself is the user's content, in whatever language it is written.
 - **Renamed from `architektur` on 13.10.2026:** new slug, new images `{arch}-architecture`. The old packages `{arch}-architektur` on ghcr.io are orphaned and can be deleted by hand.
 - **Never write to `/config`:** `run.sh` copies the model into `/data/workspace`. Structurizr writes `.structurizr/` and `workspace.json` into its data directory, and uncommitted files in the checkout of `/config` stop `config_holen`.
+
+---
+
+## Wikipedia Pulse — Custom Add-on
+
+Counts the Wikimedia EventStream `mediawiki.recentchange` and serves JSON on port 8104, no ingress, no published port. Home Assistant polls it with a `rest` sensor at `http://037accb4-wikipedia-pulse:8104/` (`037accb4` is the first eight hex digits of the SHA-1 of this repository's URL, the prefix Supervisor gives every add-on from here). Field meanings for users in `wikipedia-pulse/DOCS.md`.
+
+- **Polled, not pushed.** The add-on never writes into Home Assistant; a stopped add-on makes the rest sensors unavailable instead of freezing a value.
+- **Versioning:** `{semver}.{packaging}` like exocortex. A change to `pulse.py` bumps `version` in `wikipedia-pulse/config.yaml` in the same PR; the push to `main` under `wikipedia-pulse/` builds every version whose images are missing.
+- **Check:** `.github/workflows/wikipedia-pulse-check.yml` runs `python3 wikipedia-pulse/pulse.py --test`, builds the image and waits until the container counts live edits.
+- **Field names are an interface.** The rest sensors in the Home Assistant config read `per_minute`, `hot` and `connected` by name; renaming one breaks them silently.
 
 ---
 

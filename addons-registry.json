@@ -76,6 +76,15 @@
       "sync_files": [],
       "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-architecture",
       "custom_dockerfile": true
+    },
+    {
+      "slug": "wikipedia-pulse",
+      "name": "Wikipedia Pulse",
+      "source": "https://github.com/pajew-ski/home-assistant-apps-collection",
+      "branch": "main",
+      "sync_files": [],
+      "image_prefix": "ghcr.io/pajew-ski/home-assistant-apps-collection/{arch}-wikipedia-pulse",
+      "custom_dockerfile": true
     }
   ]
 }

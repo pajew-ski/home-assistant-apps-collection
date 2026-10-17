@@ -1,0 +1,37 @@
+name: Wikipedia Pulse check
+
+# Runs the self-test, builds the image on the Home Assistant base and asks the
+# running container for its JSON, the way the rest sensor in Home Assistant does.
+# Without this, a broken image is first built after the merge, when it is
+# already offered.
+
+on:
+  pull_request:
+    paths:
+      - 'wikipedia-pulse/**'
+      - '.github/workflows/wikipedia-pulse-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Self-test without network
+        run: python3 wikipedia-pulse/pulse.py --test
+
+      - name: Build the image (amd64)
+        run: docker build --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest -t pulse:check wikipedia-pulse
+
+      - name: Start it and wait for counted edits
+        run: |
+          docker run -d --name pulse pulse:check
+          ask() { docker exec pulse wget -qO- http://127.0.0.1:8104/; }
+          for i in $(seq 1 30); do
+            ask 2>/dev/null | jq -e '.connected and .per_minute.all > 0' >/dev/null && break
+            sleep 3
+          done
+          ask | jq -e '.connected and .per_minute.all > 0 and (.hot | has("dewiki"))' || { docker logs pulse; exit 1; }
