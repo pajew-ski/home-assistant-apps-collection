@@ -16,7 +16,9 @@ The add-on configuration is labelled in English and German. Structurizr's own in
 
 ## Live state
 
-A `!script` in the model (for example `live.groovy`) can read `SUPERVISOR_TOKEN` and ask `http://supervisor/core/api/states` and `http://supervisor/addons` while the DSL is parsed. Structurizr only parses again when a file changes, so the add-on compares the states of every entity named in a `"ha.entity"` property, and the add-on list, every 30 seconds; on a change it touches `live.groovy`, and open pages reload by themselves.
+A `!script` in the model (for example `live.groovy`) can read `SUPERVISOR_TOKEN` and ask `http://supervisor/core/api/states` and `http://supervisor/addons/<slug>/info` while the DSL is parsed. Structurizr only parses again when a file changes, so the add-on compares the states of every entity named in a `"ha.entity"` property, and state and version of every add-on named in a `"ha.addon"` property, every 30 seconds; on a change it touches `live.groovy`, and open pages reload by themselves.
+
+The add-on has the Supervisor's default role, which reads `*/info` but not the list `/addons` (that takes the role `manager`, which can also stop, install and remove add-ons). So the model only knows the add-ons it names: a newly installed add-on appears once someone adds it to the model with a `"ha.addon"` property.
 
 ## Access
 
