@@ -27,15 +27,24 @@ copy_model() {
 # reads the states only while parsing. So: when a watched state changes,
 # touch live.groovy; the parse runs, and open pages reload by themselves.
 # Which states count is decided in live.groovy alone; here only "changed or not".
+# Values of a DSL property across the model, comma lists split, one per line.
+prop() {
+    grep -ohE "\"$1\" *\"[^\"]+\"" "$TARGET"/*.dsl 2>/dev/null \
+        | sed -E 's/.*" *"([^"]+)"$/\1/' | tr ',' '\n' | tr -d ' ' | sort -u
+}
+
 fingerprint() {
     local ids
-    ids=$(grep -ohE '"ha\.entity" *"[^"]+"' "$TARGET"/*.dsl 2>/dev/null \
-        | sed -E 's/.*"ha\.entity" *"([^"]+)"/\1/' | tr ',' '\n' | tr -d ' ' | sort -u | jq -R . | jq -sc .)
+    ids=$(prop 'ha\.entity' | jq -R . | jq -sc .)
     {
         curl -sf -m 8 -H "Authorization: Bearer ${SUPERVISOR_TOKEN:-}" http://supervisor/core/api/states \
             | jq -c --argjson ids "$ids" '[.[] | select(.entity_id as $e | $ids | index($e)) | [.entity_id, .state]] | sort'
-        curl -sf -m 8 -H "Authorization: Bearer ${SUPERVISOR_TOKEN:-}" http://supervisor/addons \
-            | jq -c '[.data.addons[] | [.slug, .state, .version]] | sort'
+        # Only add-ons the model names, one by one: role default allows */info,
+        # not the list /addons. A new add-on shows up once the model names it.
+        prop 'ha\.addon' | grep -E '^[a-z0-9_]+$' | while read -r slug; do
+            curl -sf -m 8 -H "Authorization: Bearer ${SUPERVISOR_TOKEN:-}" "http://supervisor/addons/$slug/info" \
+                | jq -c --arg s "$slug" '[$s, .data.state, .data.version]'
+        done
     } | sha1sum
 }
 
