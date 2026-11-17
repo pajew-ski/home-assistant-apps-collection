@@ -47,11 +47,6 @@ home-assistant-apps-collection/
 ├── open-entrainer/            # Static app (same files)
 ├── open-desensitizer/         # Static app (same files)
 ├── open-helix/                # Static app (same files)
-├── open-workspace/            # Upstream mirror (commit-versioned, CI-gated)
-│   ├── config.yaml            #   from deploy/ha-addon/ upstream
-│   ├── DOCS.md
-│   ├── icon.png
-│   └── .upstream-sha
 ├── architecture/              # Custom add-on: Structurizr local behind nginx
 ├── wikipedia-pulse/           # Custom add-on: one Python script, the Wikimedia edit stream as JSON
 └── exocortex/                 # Custom add-on (self-contained in this repo)
@@ -84,7 +79,6 @@ home-assistant-apps-collection/
 | `open-entrainer` | static app | https://github.com/pajew-ski/open-entrainer |
 | `open-desensitizer` | static app | https://github.com/pajew-ski/open-desensitizer |
 | `open-helix` | static app | https://github.com/pajew-ski/open-helix |
-| `open-workspace` | upstream mirror (commit-versioned, CI-gated) | https://github.com/pajew-ski/open-workspace |
 | `exocortex` | custom dockerfile | self-contained in this repo |
 | `architecture` | custom dockerfile | self-contained in this repo, Structurizr built from source |
 | `wikipedia-pulse` | custom dockerfile | self-contained in this repo, one Python script |
@@ -132,7 +126,7 @@ This is the usual case for the family of single-file apps. No workflow code is n
 
 ### Any other add-on
 
-The upstream must be a valid Home Assistant add-on (a `config.yaml` with `name`, `version`, `slug`, `arch`, `startup`, `boot`, and a `Dockerfile` that accepts `ARG BUILD_FROM`). Register it in `addons-registry.json`, create `<slug>/config.yaml` with the `image:` field, and add its own jobs to `sync-addons.yml` following the `open-workspace` jobs: a check job that decides from the upstream commit, a build job, and a publish job that commits `config.yaml` only after the images are pushed, pushes with rebase and retry, and runs `check-public.sh`.
+The upstream must be a valid Home Assistant add-on (a `config.yaml` with `name`, `version`, `slug`, `arch`, `startup`, `boot`, and a `Dockerfile` that accepts `ARG BUILD_FROM`). Register it in `addons-registry.json`, create `<slug>/config.yaml` with the `image:` field, and add its own jobs to `sync-addons.yml`: a check job that decides from the upstream commit, a build job, and a publish job that commits `config.yaml` only after the images are pushed, pushes with rebase and retry, and runs `check-public.sh`.
 
 ---
 
@@ -172,16 +166,6 @@ The static apps used to take the date of the last upstream commit as version (`Y
 | `linux/arm/v7`  | `armv7` |
 
 **`armhf` (`linux/arm/v6`) and `i386` (`linux/386`) are not available.** If an add-on's Dockerfile uses such an image, remove `armhf` and `i386` from the `arch` list in `config.yaml` and limit its build to the remaining archs. Otherwise buildx fails with `no match for platform in manifest: not found`.
-
-### Upstreams without a version bump per change (open-workspace)
-
-`open-workspace` keeps `version: "0.1.0"` in `deploy/ha-addon/config.yaml` while `main` moves on, so a version comparison never detects updates. It has its own jobs in `sync-addons.yml` (`open-workspace-check`, `-build`, `-publish`):
-
-- **Trigger:** upstream `main` HEAD differs from `open-workspace/.upstream-sha` and the diff touches something that ends up in the image or the manifest (`src/`, `scripts/`, `public/`, `seed/`, `ontology/`, `deploy/ha-addon/`, `Dockerfile`, `package.json`, `bun.lock`, …). Docs-only commits are skipped.
-- **Gate:** all check runs of that commit are completed and green; otherwise the next run picks it up.
-- **Version:** `{upstream version}.{commit time YYYYMMDDHHMM}`; *Force rebuild* of an unchanged commit uses the current time so HA still offers the update.
-- **Build:** natively per arch (`ubuntu-latest`, `ubuntu-24.04-arm`) with the upstream Dockerfile unchanged (no `BUILD_FROM`; it brings `oven/bun` and `node:22-alpine`, hence amd64/aarch64 only). bun under QEMU is unreliable.
-- **Publish:** `config.yaml` is committed only after both images are pushed. The upstream `image:` field (`ghcr.io/pajew-ski/open-workspace`, never built) is replaced, not appended.
 
 ---
 
