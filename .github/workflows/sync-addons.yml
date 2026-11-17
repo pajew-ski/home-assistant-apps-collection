@@ -7,7 +7,7 @@ name: Sync Add-ons
 #   after a merge to main (its notify workflow), with the slug as payload.
 # - schedule: hourly fallback. Every check compares against what was built
 #   last, so a run without changes only reads a few API endpoints.
-# - push to main under exocortex/, architecture/ or wikipedia-pulse/: a version bump there is built at once.
+# - push to main under architecture/ or wikipedia-pulse/: a version bump there is built at once.
 # - workflow_dispatch: by hand, for one add-on or all, optionally forced.
 #
 # Pushes to main come from several jobs; each one rebases and retries, and the
@@ -18,7 +18,7 @@ on:
     types: [upstream-changed]
   push:
     branches: [main]
-    paths: ['exocortex/**', 'architecture/**', 'wikipedia-pulse/**']
+    paths: ['architecture/**', 'wikipedia-pulse/**']
   schedule:
     - cron: '23 * * * *'
   workflow_dispatch:
@@ -176,107 +176,6 @@ jobs:
           git add -A -- $(jq -r '.slug' built/*.json)
           git diff --cached --quiet && exit 0
           git commit -m "chore(static apps): sync ${{ steps.publish.outputs.summary }}"
-          for DELAY in 2 4 8 16; do
-            git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME" && exit 0
-            sleep "$DELAY"
-          done
-          exit 1
-
-  # ---------------------------------------------------------------------------
-  # exocortex – custom Dockerfile, self-contained in this repo
-  #
-  # Code changes bump the {semver} part of exocortex/config.yaml by hand. A
-  # version whose images are not in the registry yet is built; a forced run
-  # increments the packaging suffix and rebuilds.
-  # ---------------------------------------------------------------------------
-  exocortex:
-    if: ${{ (inputs.addon || github.event.client_payload.slug || '') == '' || (inputs.addon || github.event.client_payload.slug) == 'exocortex' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout collection
-        uses: actions/checkout@v5
-
-      - name: Check exocortex for updates
-        id: exocortex
-        run: |
-          CURRENT_VERSION=$(grep '^version:' exocortex/config.yaml \
-            | awk '{print $2}' | tr -d '"')
-          CURRENT_UPSTREAM=$(echo "$CURRENT_VERSION" | sed 's/\.[0-9]*$//')
-          PACKAGING_VER=$(echo "$CURRENT_VERSION" | sed 's/.*\.\([0-9]*\)$/\1/')
-
-          # Is the image of this exact version in the registry, for every arch?
-          published() {
-            local repo="${REGISTRY#ghcr.io/}/$1-exocortex" token
-            token=$(curl -sf "https://ghcr.io/token?scope=repository:${repo}:pull" | jq -r '.token // empty')
-            [ -n "$token" ] && curl -sfI -H "Authorization: Bearer $token" \
-              -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json" \
-              "https://ghcr.io/v2/${repo}/manifests/${CURRENT_VERSION}" >/dev/null
-          }
-
-          if [ "$FORCE" = "true" ]; then
-            NEW_VERSION="${CURRENT_UPSTREAM}.$((PACKAGING_VER + 1))"
-            echo "needs_update=true"        >> "$GITHUB_OUTPUT"
-            echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-            echo "Force rebuild: $CURRENT_VERSION → $NEW_VERSION"
-          elif ! published amd64 || ! published aarch64; then
-            echo "needs_update=true"            >> "$GITHUB_OUTPUT"
-            echo "new_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
-            echo "No image for $CURRENT_VERSION yet: building it"
-          else
-            echo "needs_update=false" >> "$GITHUB_OUTPUT"
-            echo "Already up-to-date at $CURRENT_VERSION"
-          fi
-
-      - name: Set up QEMU (multi-arch builds)
-        if: steps.exocortex.outputs.needs_update == 'true'
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        if: steps.exocortex.outputs.needs_update == 'true'
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        if: steps.exocortex.outputs.needs_update == 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push exocortex Docker images
-        if: steps.exocortex.outputs.needs_update == 'true'
-        env:
-          NEW_VERSION: ${{ steps.exocortex.outputs.new_version }}
-        run: |
-          set -euo pipefail
-          declare -A PLATFORM=([amd64]=linux/amd64 [aarch64]=linux/arm64)
-          for ARCH in amd64 aarch64; do
-            IMAGE="${REGISTRY}/${ARCH}-exocortex"
-            echo "Building ${IMAGE}:${NEW_VERSION} for ${PLATFORM[$ARCH]}"
-            docker buildx build \
-              --platform "${PLATFORM[$ARCH]}" \
-              --build-arg BUILD_FROM="ghcr.io/home-assistant/${ARCH}-base-ubuntu:latest" \
-              --build-arg BUILD_ARCH="$ARCH" \
-              --build-arg EXOCORTEX_VERSION="$NEW_VERSION" \
-              --tag "${IMAGE}:${NEW_VERSION}" \
-              --tag "${IMAGE}:latest" \
-              --push \
-              exocortex/
-          done
-          sed -i "s/^version:.*/version: \"$NEW_VERSION\"/" exocortex/config.yaml
-
-      - name: Check that the images are public
-        if: steps.exocortex.outputs.needs_update == 'true'
-        run: .github/scripts/check-public.sh "${REGISTRY#ghcr.io/}/amd64-exocortex" "${REGISTRY#ghcr.io/}/aarch64-exocortex"
-
-      - name: Commit and push exocortex changes
-        if: steps.exocortex.outputs.needs_update == 'true'
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add exocortex/
-          git diff --cached --quiet && exit 0
-          git commit -m "chore(exocortex): rebuild v${{ steps.exocortex.outputs.new_version }}"
           for DELAY in 2 4 8 16; do
             git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME" && exit 0
             sleep "$DELAY"

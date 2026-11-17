@@ -20,7 +20,6 @@ A single-link Home Assistant add-on repository that aggregates multiple add-ons.
 | [Open Entrainer](./open-entrainer/) | A binaural beat generator with a plan you set and pink noise underneath. | [pajew-ski/open-entrainer](https://github.com/pajew-ski/open-entrainer) |
 | [Open Desensitizer](./open-desensitizer/) | Bilateral stimulation with a moving dot, an optional tone and a grounding exercise. | [pajew-ski/open-desensitizer](https://github.com/pajew-ski/open-desensitizer) |
 | [Open Helix](./open-helix/) | A Shepard-Risset glissando, every parameter adjustable, with a live spectrogram. | [pajew-ski/open-helix](https://github.com/pajew-ski/open-helix) |
-| [Exocortex](./exocortex/) | Knowledge operating system with hybrid search, SPARQL graph, AI agent memory, MCP server and multi-agent orchestration. | [pajew-ski/home-assistant-apps-collection](https://github.com/pajew-ski/home-assistant-apps-collection) |
 | [Wikipedia Pulse](./wikipedia-pulse/) | Live edit rate of all Wikimedia wikis and the articles most people are editing right now, as JSON for a rest sensor (amd64, aarch64). | [pajew-ski/home-assistant-apps-collection](https://github.com/pajew-ski/home-assistant-apps-collection) |
 | [Architecture](./architecture/) | C4 architecture model in Structurizr DSL from a folder below /config, rendered live with the state of Home Assistant; Structurizr built from its Apache-2.0 source (amd64, aarch64). | [pajew-ski/home-assistant-apps-collection](https://github.com/pajew-ski/home-assistant-apps-collection) |
 
@@ -31,8 +30,7 @@ The store shows the current version of each add-on.
 The [sync workflow](./.github/workflows/sync-addons.yml) builds every add-on's Docker images, pushes them to `ghcr.io/pajew-ski/home-assistant-apps-collection/`, and commits the new version into the add-on's `config.yaml` only after all of its images are pushed. It runs right after a merge in a source repository (that repository's notify workflow sends a `repository_dispatch`), every hour as a fallback, and by hand.
 
 - **Static apps** (Prompts, Open Entrainer, Open Desensitizer, Open Helix): the upstream is one `index.html`, served by nginx from a shared [Dockerfile](./static-app/Dockerfile) for amd64, aarch64 and armv7. Every commit that changes `index.html` on `main` becomes a version `YYYY.M.D.HHMM` from its commit time. The last built commit is kept in `<slug>/.upstream-sha`.
-- **Open Workspace** has no per-change version upstream. It is mirrored from every green `main` commit that touches the image or the add-on manifest, versioned as `{upstream version}.{commit time YYYYMMDDHHMM}`, and built natively for amd64 and aarch64.
-- **Exocortex**, **Architecture** and **Wikipedia Pulse** live in this repository; a forced run rebuilds them with the next packaging version.
+- **Architecture** and **Wikipedia Pulse** live in this repository; a forced run rebuilds them with the next packaging version.
 
 ## Adding a New Add-on
 

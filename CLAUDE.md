@@ -48,14 +48,7 @@ home-assistant-apps-collection/
 ├── open-desensitizer/         # Static app (same files)
 ├── open-helix/                # Static app (same files)
 ├── architecture/              # Custom add-on: Structurizr local behind nginx
-├── wikipedia-pulse/           # Custom add-on: one Python script, the Wikimedia edit stream as JSON
-└── exocortex/                 # Custom add-on (self-contained in this repo)
-    ├── Dockerfile
-    ├── build.yaml
-    ├── config.yaml
-    ├── DOCS.md
-    ├── rootfs/                # s6-overlay service definitions
-    └── exocortex/             # Python/FastAPI application
+└── wikipedia-pulse/           # Custom add-on: one Python script, the Wikimedia edit stream as JSON
 ```
 
 ### Key files explained
@@ -79,7 +72,6 @@ home-assistant-apps-collection/
 | `open-entrainer` | static app | https://github.com/pajew-ski/open-entrainer |
 | `open-desensitizer` | static app | https://github.com/pajew-ski/open-desensitizer |
 | `open-helix` | static app | https://github.com/pajew-ski/open-helix |
-| `exocortex` | custom dockerfile | self-contained in this repo |
 | `architecture` | custom dockerfile | self-contained in this repo, Structurizr built from source |
 | `wikipedia-pulse` | custom dockerfile | self-contained in this repo, one Python script |
 
@@ -188,51 +180,6 @@ A valid HA add-on repository must have:
 
 ---
 
-## Exocortex — Custom Add-on
-
-Exocortex is the flagship add-on in this collection. Unlike the mirrored add-ons
-it lives entirely in this repo under `exocortex/` and ships its own Dockerfile.
-
-**What it is:** A Knowledge Operating System for Home Assistant — a single
-Docker container (s6-overlay v3) running six services:
-
-| Service | Port | Purpose |
-|---------|------|---------|
-| FastAPI | 8000 | Main API + HA ingress |
-| MeiliSearch | 7700 | Full-text search |
-| Qdrant | 6333 | Semantic vector search |
-| Oxigraph | 7878 | RDF/SPARQL graph store |
-| Redis | 6379 | Cache, agent memory, pub/sub |
-| Git sync daemon | — | Bidirectional vault sync |
-
-**Key features:**
-- Hybrid search (fulltext + semantic + graph)
-- Git-backed Markdown vault (Obsidian-compatible)
-- MCP server for AI agent integration
-- Multi-agent orchestration layer connected to the HA Event Bus
-- AI agent memory (facts, conversations, working memory)
-
-**Multi-agent orchestration** (`exocortex/exocortex/agents/`):
-- `ha_websocket.py` — persistent WS client to HA Event Bus with exponential backoff
-- `event_filter.py` — domain filter, debounce, vectorisation router
-- `orchestrator.py` — GoT Dispatcher with RAG context (Redis + Qdrant + SPARQL)
-- `domain_agents.py` — Climate, Security, Lighting, Communication agents
-- `llm_client.py` — async Ollama client
-- `ha_mcp_client.py` — HA Supervisor REST API client
-- `knoten_k.py` — decision audit agent (RDF + Redis)
-
-**Versioning scheme:** `{semver}.{packaging_patch}`, e.g. `1.0.0.1`.
-- Code changes → bump the `{semver}` part in `exocortex/config.yaml` (e.g. to `1.1.0.0`). The push to `main` under `exocortex/` starts the workflow, which builds every version whose images are not in the registry yet. Until then Home Assistant already sees the new version, so the build starts on the push, not on the next schedule.
-- Force rebuild without code changes → the workflow increments the packaging suffix
-
-**To trigger a rebuild:**
-Actions → Sync Add-ons → Run workflow → slug: `exocortex`, Force rebuild: ✓
-
-**Architecture support:** `amd64`, `aarch64` only (Ubuntu base image required for
-the bundled Oxigraph binary; Alpine is not used).
-
----
-
 ## Architecture — Custom Add-on
 
 Renders the C4 model of `/config/<folder>` (option `folder`, default `architecture`) with `structurizr local`, behind nginx on the ingress port. Details for users in `architecture/DOCS.md`; what matters for maintenance:
@@ -252,7 +199,7 @@ Renders the C4 model of `/config/<folder>` (option `folder`, default `architectu
 Counts the Wikimedia EventStream `mediawiki.recentchange` and serves JSON on port 8104, no ingress, no published port. Home Assistant polls it with a `rest` sensor at `http://037accb4-wikipedia-pulse:8104/` (`037accb4` is the first eight hex digits of the SHA-1 of this repository's URL, the prefix Supervisor gives every add-on from here). Field meanings for users in `wikipedia-pulse/DOCS.md`.
 
 - **Polled, not pushed.** The add-on never writes into Home Assistant; a stopped add-on makes the rest sensors unavailable instead of freezing a value.
-- **Versioning:** `{semver}.{packaging}` like exocortex. A change to `pulse.py` bumps `version` in `wikipedia-pulse/config.yaml` in the same PR; the push to `main` under `wikipedia-pulse/` builds every version whose images are missing.
+- **Versioning:** `{semver}.{packaging}`. A change to `pulse.py` bumps `version` in `wikipedia-pulse/config.yaml` in the same PR; the push to `main` under `wikipedia-pulse/` builds every version whose images are missing.
 - **Check:** `.github/workflows/wikipedia-pulse-check.yml` runs `python3 wikipedia-pulse/pulse.py --test`, builds the image and waits until the container counts live edits.
 - **Field names are an interface.** The rest sensors in the Home Assistant config read `per_minute`, `hot` and `connected` by name; renaming one breaks them silently.
 
@@ -266,5 +213,3 @@ Counts the Wikimedia EventStream `mediawiki.recentchange` and serves JSON on por
 - **Do not** remove the `image:` field from any `config.yaml` – without it HA
   would try to build from source and fail (no Dockerfile present).
 - **Do not** hardcode the `GITHUB_TOKEN` or any other secrets.
-- **Do not** modify the exocortex add-on's internal Oxigraph service configuration
-  — it is not the same as the former standalone Oxigraph add-on.
