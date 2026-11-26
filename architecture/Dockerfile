@@ -9,7 +9,7 @@
 # commit is bumped by hand together with `version` in config.yaml.
 
 # The war is architecture independent: build it once, natively.
-FROM --platform=$BUILDPLATFORM eclipse-temurin:25-jdk-noble@sha256:589ff4cc3f71aab462e7048a47a0d10edf57fbccde3fceea2281e610bf5880b4 AS bau
+FROM --platform=$BUILDPLATFORM eclipse-temurin:25-jdk-noble@sha256:4ddc1a8bdaf283421df5487411aff10b797ccf1e06a339041005114c8f489b5c AS bau
 ARG STRUCTURIZR_COMMIT=da99caf2f2857e5373f7b58569152274f1725ba3
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git ca-certificates \
@@ -20,7 +20,7 @@ RUN git init -q . \
     && git checkout -q FETCH_HEAD \
     && ./mvnw -q -B -P 'exclude-playwright,!include-playwright' -pl structurizr-application -am package -DskipTests
 
-FROM eclipse-temurin:25-jre-noble@sha256:d9a39a23634650173f1e2bbc176227af9728587ecf0f4b62d53e9355cd7a19ab
+FROM eclipse-temurin:25-jre-noble@sha256:f3dd0838e69b881cc382237d5901e74ae3705b1056ad964b2e0e523b174fef99
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends nginx curl jq \
