@@ -68,7 +68,7 @@ jobs:
       any: ${{ steps.check.outputs.any }}
     steps:
       - name: Checkout collection
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Check static apps for updates
         id: check
@@ -86,16 +86,16 @@ jobs:
     name: static-build (${{ matrix.slug }})
     steps:
       - name: Checkout collection
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up QEMU (multi-arch builds)
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -137,7 +137,7 @@ jobs:
             '{slug: $slug, version: $version, sha: $sha, archs: $archs}' > "built/${SLUG}.json"
 
       - name: Record the build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: built-${{ matrix.slug }}
           path: built/${{ matrix.slug }}.json
@@ -149,10 +149,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout collection
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Collect the builds that succeeded
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           pattern: built-*
@@ -194,7 +194,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout collection
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Check architecture for updates
         id: architecture
@@ -229,15 +229,15 @@ jobs:
 
       - name: Set up QEMU (multi-arch builds)
         if: steps.architecture.outputs.needs_update == 'true'
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Set up Docker Buildx
         if: steps.architecture.outputs.needs_update == 'true'
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Login to GitHub Container Registry
         if: steps.architecture.outputs.needs_update == 'true'
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -292,7 +292,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout collection
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Check wikipedia-pulse for updates
         id: pulse
@@ -327,15 +327,15 @@ jobs:
 
       - name: Set up QEMU (multi-arch builds)
         if: steps.pulse.outputs.needs_update == 'true'
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Set up Docker Buildx
         if: steps.pulse.outputs.needs_update == 'true'
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Login to GitHub Container Registry
         if: steps.pulse.outputs.needs_update == 'true'
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
