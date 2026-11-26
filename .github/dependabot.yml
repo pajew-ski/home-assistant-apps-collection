@@ -1,6 +1,4 @@
-# Monthly, grouped, merged by hand (SOP Abhängigkeiten in pajew-ski/data).
-# Only the Temurin base images of architecture/ so far; the actions of this repository
-# follow with pajew-ski/data#423.
+# Monthly, grouped, merged by hand, no automerge.
 version: 2
 updates:
   - package-ecosystem: docker
@@ -9,4 +7,11 @@ updates:
       interval: monthly
     groups:
       architecture:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
         patterns: ["*"]
